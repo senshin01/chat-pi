@@ -7,7 +7,7 @@ try {
     New-Item -ItemType Directory -Force artifacts/soxr-source, artifacts/native | Out-Null
     tar -xzf $archive -C artifacts/soxr-source
     if ($LASTEXITCODE -ne 0) { throw "Cannot extract libsoxr" }
-    cmake -S artifacts/soxr-source/soxr-0.1.3 -B artifacts/soxr-build -A x64 -DCMAKE_POLICY_VERSION_MINIMUM=3.5 `
+    cmake -S artifacts/soxr-source/soxr-0.1.3 -B artifacts/soxr-build -A x64 "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
         -DBUILD_SHARED_LIBS=ON -DBUILD_SHARED_RUNTIME=OFF -DBUILD_TESTS=OFF -DBUILD_EXAMPLES=OFF -DWITH_OPENMP=OFF -DWITH_LSR_BINDINGS=OFF `
         -DWITH_CR32=OFF -DWITH_CR32S=OFF -DWITH_VR32=OFF -DWITH_CR64=ON -DWITH_CR64S=ON -DWITH_DEV_TRACE=OFF
     if ($LASTEXITCODE -ne 0) { throw "Cannot configure libsoxr" }
