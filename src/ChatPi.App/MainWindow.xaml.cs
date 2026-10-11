@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
 using ChatPi.App.Audio;
@@ -16,23 +17,41 @@ public partial class MainWindow : Window
 {
     private readonly PlayerViewModel _model;
     private readonly DispatcherTimer _timer;
-    private bool _seeking;
+    private bool _dragging;
+    private bool _keyboardSeeking;
+    private long _seekGesture;
 
-    public MainWindow()
+    public MainWindow() : this(null) { }
+
+    internal MainWindow(PlayerViewModel? model)
     {
         InitializeComponent();
         var settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ChatPi", "settings.json");
         var player = new PlaybackController(new WindowsAudioSourceFactory(), new WindowsAudioBackendFactory(),
             action => Dispatcher.BeginInvoke(action));
-        _model = new PlayerViewModel(player, new SettingsStore(settingsPath), theme =>
+        _model = model ?? new PlayerViewModel(player, new SettingsStore(settingsPath), theme =>
         {
             ThemeManager.Apply(Application.Current.Resources, theme);
             ThemeManager.ApplyWindowTheme(this, theme);
         });
         SourceInitialized += (_, _) => ThemeManager.ApplyWindowTheme(this, _model.Settings.Theme);
         DataContext = _model;
+        // Start before Slider handles a track click. Thumb handles mouse release itself,
+        // so listen to its routed completion event even when already handled.
+        AddHandler(Mouse.PreviewMouseDownEvent, new MouseButtonEventHandler(OnSeekStart), handledEventsToo: true);
+        AddHandler(Mouse.PreviewMouseUpEvent, new MouseButtonEventHandler(OnSeekEnd), handledEventsToo: true);
+        ProgressSlider.AddHandler(Thumb.DragStartedEvent, new DragStartedEventHandler(OnSeekDragStarted), handledEventsToo: true);
+        ProgressSlider.AddHandler(Thumb.DragCompletedEvent, new DragCompletedEventHandler(OnSeekDragCompleted), handledEventsToo: true);
+        ProgressSlider.LostKeyboardFocus += (_, _) =>
+        {
+            if (_keyboardSeeking && !ProgressSlider.IsKeyboardFocusWithin)
+            {
+                _keyboardSeeking = false;
+                _model.CommitSeek();
+            }
+        };
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
-        _timer.Tick += (_, _) => { if (!_seeking) _model.RefreshProgress(); };
+        _timer.Tick += (_, _) => _model.RefreshProgress();
         _timer.Start();
         Closed += (_, _) => { _timer.Stop(); _model.Dispose(); };
     }
@@ -63,20 +82,41 @@ public partial class MainWindow : Window
             OpenFile(path);
         args.Handled = true;
     }
-    private void OnSeekStart(object sender, MouseButtonEventArgs args) => _seeking = true;
+    private void OnSeekStart(object sender, MouseButtonEventArgs args)
+    {
+        if (args.ChangedButton != MouseButton.Left || args.OriginalSource is not System.Windows.Media.Visual visual ||
+            (visual != ProgressSlider && !ProgressSlider.IsAncestorOf(visual))) return;
+        _model.BeginSeek();
+        var gesture = ++_seekGesture;
+        // A track click changes Value during this input event without starting a drag.
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
+        {
+            if (gesture == _seekGesture && !_dragging) _model.CommitSeek();
+        });
+    }
     private void OnSeekEnd(object sender, MouseButtonEventArgs args)
     {
-        if (!_seeking) return;
-        _seeking = false;
-        Dispatcher.BeginInvoke(() => _model.Seek(ProgressSlider.Value));
+        if (args.ChangedButton == MouseButton.Left && !_dragging) _model.CommitSeek();
+    }
+    private void OnSeekDragStarted(object sender, DragStartedEventArgs args)
+    {
+        _dragging = true;
+        _model.BeginSeek();
+    }
+    private void OnSeekDragCompleted(object sender, DragCompletedEventArgs args)
+    {
+        _dragging = false;
+        _seekGesture++;
+        if (args.Canceled) _model.CancelSeek();
+        else _model.CommitSeek();
     }
     private void OnSeekKeyDown(object sender, KeyEventArgs args)
     {
-        if (IsSeekKey(args.Key)) _seeking = true;
+        if (IsSeekKey(args.Key)) { _keyboardSeeking = true; _model.BeginSeek(); }
     }
     private void OnSeekKeyUp(object sender, KeyEventArgs args)
     {
-        if (IsSeekKey(args.Key)) { _seeking = false; _model.Seek(ProgressSlider.Value); }
+        if (IsSeekKey(args.Key)) { _keyboardSeeking = false; _model.CommitSeek(); }
     }
     private static bool IsSeekKey(Key key) => key is Key.Left or Key.Right or Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown;
     private void OnWindowKeyDown(object sender, KeyEventArgs args)

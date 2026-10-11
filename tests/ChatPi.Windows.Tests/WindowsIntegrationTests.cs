@@ -20,6 +20,9 @@ public sealed class WindowsIntegrationTests
         while ((count = provider.Read(buffer, 0, buffer.Length)) != 0) decoded.Write(buffer, 0, count);
         Assert.InRange(decoded.Length, 44100 * 4 / 2, 44100 * 4);
         Assert.Contains(decoded.ToArray(), value => value != 0);
+        stream.CurrentTime = TimeSpan.FromMilliseconds(300);
+        Assert.InRange(stream.CurrentTime.TotalMilliseconds, 299, 301);
+        Assert.True(provider.Read(buffer, 0, buffer.Length) > 0);
         stream.CurrentTime = TimeSpan.Zero;
         Assert.True(provider.Read(buffer, 0, buffer.Length) > 0);
     }

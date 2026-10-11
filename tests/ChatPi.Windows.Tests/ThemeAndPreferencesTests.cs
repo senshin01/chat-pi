@@ -1,4 +1,3 @@
-using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -17,24 +16,14 @@ public sealed class ThemeAndPreferencesTests
     [Fact]
     public void ThemesUpdateBothWindowsAndSavedPreferencesDoNotInterruptPlayback()
     {
-        Exception? failure = null;
-        var thread = new Thread(() =>
-        {
-            try { VerifyOnUiThread(); }
-            catch (Exception exception) { failure = exception; }
-        }) { IsBackground = true };
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        Assert.True(thread.Join(TimeSpan.FromSeconds(30)), "WPF test timed out.");
-        if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
+        WpfTestHost.Run(VerifyOnUiThread);
     }
 
     private static void VerifyOnUiThread()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"chatpi-theme-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
-        var app = new ChatPi.App.App();
-        app.InitializeComponent();
+        var app = Application.Current;
         var window = new MainWindow();
         var settingsWindow = new SettingsWindow(new PlayerSettings(), _ => { });
         try

@@ -16,6 +16,7 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
     private string? _lastPath;
     private ImageSource? _artwork;
     private string? _error;
+    private double _seekSeconds;
 
     public PlayerViewModel(PlaybackController player, SettingsStore store, Action<PlayerTheme> applyTheme)
     {
@@ -48,9 +49,21 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
     public bool IsNotPlaying => !IsPlaying;
     public bool RepeatEnabled => Settings.RepeatEnabled;
     public string RepeatLabel => RepeatEnabled ? "リピート: オン" : "リピート: オフ";
-    public string PositionText => FormatTime(_player.Position);
+    public string PositionText => FormatTime(TimeSpan.FromSeconds(SeekPositionSeconds));
     public string DurationText => FormatTime(_player.Duration);
     public double PositionSeconds => _player.Position.TotalSeconds;
+    public bool IsSeeking { get; private set; }
+    public double SeekPositionSeconds
+    {
+        get => IsSeeking ? _seekSeconds : PositionSeconds;
+        set
+        {
+            if (!IsSeeking) return;
+            _seekSeconds = Math.Clamp(value, 0, _player.Duration.TotalSeconds);
+            OnPropertyChanged(nameof(SeekPositionSeconds));
+            OnPropertyChanged(nameof(PositionText));
+        }
+    }
     public double DurationSeconds => Math.Max(1, _player.Duration.TotalSeconds);
     public string? Error => _error;
     public bool HasError => !string.IsNullOrEmpty(_error);
@@ -82,6 +95,7 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
         Try(() =>
         {
             path = AudioFiles.ValidatePath(path);
+            IsSeeking = false;
             _lastPath = path;
             _track = TrackMetadata.Read(path);
             _artwork = LoadArtwork(_track.Artwork);
@@ -97,9 +111,30 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
         else _player.Play();
     });
 
-    public void Stop() => Try(_player.Stop);
+    public void Stop() { IsSeeking = false; Try(_player.Stop); }
     public void ToggleRepeat() => Try(() => ApplySettings(Settings with { RepeatEnabled = !RepeatEnabled }));
     public void Seek(double seconds) => Try(() => _player.Seek(TimeSpan.FromSeconds(seconds)));
+
+    public void BeginSeek()
+    {
+        if (IsSeeking || !CanSeek) return;
+        _seekSeconds = PositionSeconds;
+        IsSeeking = true;
+    }
+
+    public void CommitSeek()
+    {
+        if (!IsSeeking) return;
+        var seconds = _seekSeconds;
+        IsSeeking = false;
+        Seek(seconds);
+    }
+
+    public void CancelSeek()
+    {
+        IsSeeking = false;
+        NotifyAll();
+    }
 
     public void ApplySettings(PlayerSettings settings)
     {
@@ -128,7 +163,11 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
     public void RefreshProgress()
     {
         OnPropertyChanged(nameof(PositionSeconds));
-        OnPropertyChanged(nameof(PositionText));
+        if (!IsSeeking)
+        {
+            OnPropertyChanged(nameof(SeekPositionSeconds));
+            OnPropertyChanged(nameof(PositionText));
+        }
     }
 
     private void Try(Action action)

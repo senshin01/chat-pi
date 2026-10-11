@@ -46,9 +46,8 @@
     </Grid>
 
     <StackPanel Grid.Row="2">
-      <Slider x:Name="ProgressSlider" Value="{Binding PositionSeconds, Mode=OneWay}" Maximum="{Binding DurationSeconds}"
+      <Slider x:Name="ProgressSlider" Value="{Binding SeekPositionSeconds, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Maximum="{Binding DurationSeconds}"
               Minimum="0" IsEnabled="{Binding CanSeek}" AutomationProperties.Name="再生位置"
-              PreviewMouseLeftButtonDown="OnSeekStart" PreviewMouseLeftButtonUp="OnSeekEnd"
               PreviewKeyDown="OnSeekKeyDown" PreviewKeyUp="OnSeekKeyUp" />
       <Grid Margin="0,4,0,18">
         <TextBlock Text="{Binding PositionText}" Foreground="{DynamicResource MutedBrush}" FontSize="11" />
