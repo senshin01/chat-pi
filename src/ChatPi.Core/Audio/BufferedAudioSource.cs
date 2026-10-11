@@ -61,6 +61,7 @@ public sealed class BufferedAudioSource : IWaveProvider, IDisposable
     {
         settings.Validate();
         if (settings.UpsamplingFactor != _settings.Dsp.UpsamplingFactor || settings.Enabled != DspEnabled) return false;
+        if (settings.UpsamplingFactor > 1 && settings.Filter != _settings.Dsp.Filter) return false;
         if (!DspEnabled) return true;
         var eq = new GraphicEqualizer(_native.WaveFormat.SampleRate, _native.WaveFormat.Channels, settings);
         Interlocked.Exchange(ref _pendingEqualizer, new EqualizerChange(eq, settings.DitherEnabled));
@@ -116,7 +117,7 @@ public sealed class BufferedAudioSource : IWaveProvider, IDisposable
             var eq = _initialEqualizer;
             var converter = DspEnabled ? new DspSampleConverter(WaveFormat, _validBits, _settings.Dsp.DitherEnabled) : null;
             using var resampler = _settings.Dsp.UpsamplingFactor > 1
-                ? new SoxrResampler(_native.WaveFormat.SampleRate, _settings.Dsp.UpsamplingFactor, channels) : null;
+                ? PcmResamplers.Create(_native.WaveFormat.SampleRate, _settings.Dsp.UpsamplingFactor, channels, _settings.Dsp.Filter) : null;
             // Warm up causal EQ and SRC around a seek without playing pre-target audio.
             var preroll = DspEnabled ? Math.Min(_startFrame, _stream.WaveFormat.SampleRate / 5) : 0;
             var skipFrames = preroll * _settings.Dsp.UpsamplingFactor;

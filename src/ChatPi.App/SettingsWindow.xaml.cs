@@ -22,6 +22,7 @@ public partial class SettingsWindow : Window
         _bandGains = (double[])settings.Dsp.BandGainsDb.Clone();
         InitializeComponent();
         UpsamplingBox.SelectedValue = settings.Dsp.UpsamplingFactor.ToString();
+        FilterBox.SelectedValue = settings.Dsp.Filter.ToString();
         EqualizerEnabledBox.IsChecked = settings.Dsp.EqualizerEnabled;
         AutoHeadroomBox.IsChecked = settings.Dsp.AutoHeadroom;
         DitherBox.IsChecked = settings.Dsp.DitherEnabled;
@@ -108,6 +109,7 @@ public partial class SettingsWindow : Window
                     EqualizerEnabled = EqualizerEnabledBox.IsChecked == true,
                     BandGainsDb = (double[])_bandGains.Clone(),
                     UpsamplingFactor = int.Parse((string)UpsamplingBox.SelectedValue),
+                    Filter = Enum.Parse<UpsamplingFilter>((string)FilterBox.SelectedValue),
                     AutoHeadroom = AutoHeadroomBox.IsChecked == true,
                     PreampDb = preamp,
                     DitherEnabled = DitherBox.IsChecked == true

@@ -128,7 +128,7 @@ public sealed class WindowsAudioBackendFactory : IPlaybackBackendFactory
         try
         {
             var diagnostic = AudioDiagnostics.Default;
-            diagnostic.Write($"driver={settings.AsioDriverName} EQ={settings.Dsp.EqualizerEnabled} SRC={settings.Dsp.UpsamplingFactor}");
+            diagnostic.Write($"driver={settings.AsioDriverName} EQ={settings.Dsp.EqualizerEnabled} SRC={settings.Dsp.UpsamplingFactor} filter={settings.Dsp.Filter}");
             driver = AsioDriverSession.Open(() => new AsioDriverSession(settings.AsioDriverName!),
                 source.WaveFormat.SampleRate, settings.AsioChannelOffset, source.WaveFormat.Channels, diagnostic.Write);
             var player = new AsioPlaybackOutput(driver, source, settings.AsioChannelOffset, diagnostic.Write);

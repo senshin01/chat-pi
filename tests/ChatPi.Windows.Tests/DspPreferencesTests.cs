@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ChatPi.App;
+using ChatPi.App.Audio;
 using ChatPi.App.Services;
 using ChatPi.App.ViewModels;
 using ChatPi.Core;
@@ -33,6 +34,7 @@ public sealed class DspPreferencesTests
             Assert.Equal(6, eq.Bands[8].GainDb);
             Assert.Equal("1k", eq.Bands[8].Label);
             Assert.Equal("1", ((ComboBox)settings.FindName("UpsamplingBox")).SelectedValue);
+            Assert.Equal("Standard", ((ComboBox)settings.FindName("FilterBox")).SelectedValue);
             Assert.False(((CheckBox)settings.FindName("EqualizerEnabledBox")).IsChecked);
             Assert.True(((CheckBox)settings.FindName("AutoHeadroomBox")).IsChecked);
             var path = Path.Combine(directory, "track.wav");
@@ -68,6 +70,70 @@ public sealed class DspPreferencesTests
             Assert.True(reloaded.Settings.Dsp.EqualizerEnabled); Assert.Equal(4, reloaded.Settings.Dsp.UpsamplingFactor);
         }
         finally { eq.Close(); settings.Close(); window.Close(); Directory.Delete(directory, true); }
+    });
+
+    [Fact]
+    public void FilterSelectionAppliesPersistsAndKeepsPositionWhileOtherDspControlsStillWork() => WpfTestHost.Run(() =>
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"chatpi-filter-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var store = new SettingsStore(Path.Combine(directory, "settings.json"));
+        var backend = new TestBackend();
+        using var model = new PlayerViewModel(new PlaybackController(new WavSources(), backend, action => action()), store,
+            theme => ThemeManager.Apply(Application.Current.Resources, theme));
+        var window = new MainWindow(model);
+        var settings = new SettingsWindow(model.Settings, model.ApplySettings);
+        try
+        {
+            var path = Path.Combine(directory, "track.wav");
+            using (var writer = new WaveFileWriter(path, new WaveFormat(44100, 24, 2))) writer.Write(new byte[44100 * 6], 0, 44100 * 6);
+            model.Open(path); model.Seek(.25);
+            // CI has no physical audio endpoint. Only the device-picker input is supplied;
+            // the real settings controls and routed Apply event are exercised.
+            var deviceBox = (ComboBox)settings.FindName("DeviceBox");
+            deviceBox.ItemsSource = new[] { new AudioDevice(null, "Test device") }; deviceBox.SelectedIndex = 0;
+            ((ComboBox)settings.FindName("UpsamplingBox")).SelectedValue = "4";
+            ((ComboBox)settings.FindName("FilterBox")).SelectedValue = "SuperSlow";
+            ((CheckBox)settings.FindName("EqualizerEnabledBox")).IsChecked = true;
+            ((TextBox)settings.FindName("PreampBox")).Text = "-1";
+            ((Button)settings.FindName("ApplyButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal("適用しました。", ((TextBlock)settings.FindName("ErrorText")).Text);
+            Assert.Equal(UpsamplingFilter.SuperSlow, store.Load().Dsp.Filter);
+            Assert.Contains("\"Filter\": \"SuperSlow\"", File.ReadAllText(Path.Combine(directory, "settings.json")));
+            Assert.True(model.IsPlaying); Assert.Equal(.25, model.PositionSeconds);
+            Assert.Equal(176400, backend.Last!.Source.WaveFormat.SampleRate);
+            Assert.Contains("フィルター スーパースロー", model.DspDetailText);
+            Assert.Contains("プリアンプ -4.0 dB", model.DspDetailText);
+            WpfTestHost.FlushBindings();
+            Assert.Equal(model.DspDetailText, ((TextBlock)window.FindName("DspDetail")).Text);
+            foreach (var theme in new[] { PlayerTheme.Dark, PlayerTheme.Light })
+            {
+                ThemeManager.Apply(Application.Current.Resources, theme);
+                SavePreview(window, new Size(650, 560), $"filter-player-{theme}");
+                SavePreview(settings, new Size(500, 650), $"filter-settings-{theme}");
+            }
+            var active = backend.Last;
+            var gains = new double[15]; gains[8] = 6;
+            model.ApplySettings(model.Settings with { Dsp = model.Settings.Dsp with { BandGainsDb = gains } });
+            Assert.Same(active, backend.Last);
+            model.TogglePlay(); Assert.False(model.IsPlaying);
+            ((ComboBox)settings.FindName("FilterBox")).SelectedValue = "Standard";
+            ((Button)settings.FindName("ApplyButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(model.IsPlaying); Assert.Equal(.25, model.PositionSeconds);
+            Assert.True(active!.Disposed);
+            model.TogglePlay();
+            Assert.Equal(176400, backend.Last!.Source.WaveFormat.SampleRate);
+            Assert.Contains("フィルター 標準", model.DspDetailText);
+            ((ComboBox)settings.FindName("FilterBox")).SelectedValue = "SuperSlow";
+            ((Button)settings.FindName("ApplyButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            model.Stop();
+            using var reloaded = new PlayerViewModel(new PlaybackController(new WavSources(), new TestBackend(), action => action()), store, _ => { });
+            Assert.Equal(UpsamplingFilter.SuperSlow, reloaded.Settings.Dsp.Filter);
+            var reopened = new SettingsWindow(reloaded.Settings, reloaded.ApplySettings);
+            try { Assert.Equal("SuperSlow", ((ComboBox)reopened.FindName("FilterBox")).SelectedValue); }
+            finally { reopened.Close(); }
+        }
+        finally { settings.Close(); window.Close(); Directory.Delete(directory, true); }
     });
 
     private static void SavePreview(Window window, Size size, string name)
