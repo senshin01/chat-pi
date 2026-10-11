@@ -14,6 +14,7 @@ internal sealed class NativeMediaFoundationWaveStream : WaveStream
     private readonly string _path;
     private IMFSourceReader? _reader;
     private long _length;
+    private long? _flacFrames;
     private long _position;
     private long? _pendingSeek;
     private long? _trimUntilFrame = 0;
@@ -29,7 +30,8 @@ internal sealed class NativeMediaFoundationWaveStream : WaveStream
         try
         {
             WaveFormat = format;
-            _length = GetDurationBytes(reader, format);
+            // Windows can report a zero FLAC duration until it reads the first packet.
+            _length = _flacFrames is > 0 ? checked(_flacFrames.Value * format.BlockAlign) : GetDurationBytes(reader, format);
         }
         finally { Marshal.ReleaseComObject(reader); }
     }
@@ -82,6 +84,8 @@ internal sealed class NativeMediaFoundationWaveStream : WaveStream
                         header[5] != 0 || header[6] != 0 || header[7] != 34)
                         throw new InvalidDataException("FLAC の STREAMINFO が不正です。");
                     minimumBits = (((header[20] & 1) << 4) | (header[21] >> 4)) + 1;
+                    _flacFrames = ((long)(header[21] & 0x0F) << 32) |
+                        System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(header[22..]);
                     if (minimumBits is < 8 or > 24) throw new NotSupportedException("FLAC は 8〜24 bit の音源に対応しています。");
                 }
                 var candidates = lossless
@@ -143,7 +147,7 @@ internal sealed class NativeMediaFoundationWaveStream : WaveStream
         ArgumentOutOfRangeException.ThrowIfNegative(count);
         if (offset > buffer.Length - count || count % WaveFormat.BlockAlign != 0) throw new ArgumentException("PCM の読み込み範囲が不正です。");
         if (count == 0) return 0;
-        if (_pendingSeek == Length)
+        if (Length > 0 && _pendingSeek == Length)
         {
             // Seeking to exact EOF must not depend on a codec accepting an end timestamp.
             _decoded = [];

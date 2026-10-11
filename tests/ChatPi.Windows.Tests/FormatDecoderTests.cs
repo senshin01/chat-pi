@@ -24,6 +24,7 @@ public sealed class FormatDecoderTests
         Assert.Equal(WaveFormatEncoding.Pcm, stream.WaveFormat.Encoding);
         Assert.True(stream.WaveFormat.BitsPerSample >= original.WaveFormat.BitsPerSample);
         var expected = ExpandIntegerSamples(ReadAll(original), original.WaveFormat.BitsPerSample, stream.WaveFormat.BitsPerSample);
+        Assert.Equal(expected.Length, stream.Length);
         Assert.Equal(expected, ReadAll(stream));
         stream.CurrentTime = TimeSpan.FromMilliseconds(250);
         var position = (int)stream.Position;
