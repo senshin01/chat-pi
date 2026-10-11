@@ -103,6 +103,7 @@ public sealed class BufferedAudioSource : IWaveProvider, IDisposable
     {
         try
         {
+            using var priority = new AudioThreadPriority();
             var channels = _native.WaveFormat.Channels;
             var input = new byte[256 * _native.WaveFormat.BlockAlign];
             var samples = new double[256 * channels];

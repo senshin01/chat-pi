@@ -8,6 +8,8 @@ The raw native pipeline remains separate from the DSP pipeline. Disabling both E
 
 The default capacity is 40 ms, with a user range of 20–200 ms. Capacity is enlarged to cover two ASIO blocks or the requested WASAPI buffer, whichever is applicable. Initial prefill runs before device start. This is preparation time, not an artificial timer delay. Total hardware latency is not inferred from ring capacity.
 
+On Windows the producer requests the MMCSS `Pro Audio` task with high multimedia priority. Registration and reversion happen on that same producer thread. If the OS declines registration, normal scheduling remains available; no process-wide real-time priority is set.
+
 Pause retains the queue. Seek stops the device and producer, discards the queue and DSP state, and restarts from the requested source frame. DSP seeks decode up to 200 ms before the target to warm filter/SRC history and discard the corresponding output. Native seeks preserve exact sample boundaries. SRC's end-of-input flush is drained before EOF. The timeline counts consumed real output frames, converts them back to source time, and does not advance for starvation silence. No hardware clock correction or gapless repeat is claimed.
 
 ## EQ, precision, and peaks
