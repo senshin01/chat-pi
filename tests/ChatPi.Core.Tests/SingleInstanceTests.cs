@@ -23,7 +23,7 @@ public sealed class SingleInstanceTests
                 Assert.True(primary.IsPrimary);
                 primary.StartListening(path => { delivered.Add(new LaunchMessage(path)); return Task.CompletedTask; });
                 ready.SetResult();
-                if (!stop.Wait(TimeSpan.FromSeconds(20))) throw new TimeoutException();
+                if (!stop.Wait(TimeSpan.FromSeconds(30))) throw new TimeoutException();
             }
             catch (Exception exception) { ready.TrySetException(exception); throw; }
         });
@@ -34,11 +34,18 @@ public sealed class SingleInstanceTests
             using var secondary = new SingleInstanceHost(id);
             Assert.False(secondary.IsPrimary);
             await secondary.SendAsync(expected);
-            Assert.True(delivered.TryTake(out var actual, TimeSpan.FromSeconds(5)));
+            Assert.True(delivered.TryTake(out var actual));
             Assert.Equal(expected, actual.Path);
             await secondary.SendAsync(null);
-            Assert.True(delivered.TryTake(out var focusOnly, TimeSpan.FromSeconds(5)));
+            Assert.True(delivered.TryTake(out var focusOnly));
             Assert.Null(focusOnly.Path);
+            for (var index = 0; index < 20; index++)
+            {
+                var next = Path.GetFullPath($"続けて開く {index}.wav");
+                await secondary.SendAsync(next);
+                Assert.True(delivered.TryTake(out var message));
+                Assert.Equal(next, message.Path);
+            }
         }
         finally { stop.Set(); await primaryTask; }
     }
