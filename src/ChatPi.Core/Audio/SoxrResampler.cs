@@ -22,7 +22,7 @@ public sealed class SoxrResampler : IDisposable
         runtime.MinDft = 8;
         runtime.LargeDft = 10; // Avoid large FFT batches for small stereo playback blocks.
         _handle = Create(inputRate, checked(inputRate * factor), (uint)channels, out var error, ref io, ref quality, ref runtime);
-        Check(error);
+        if (error != IntPtr.Zero) { Dispose(); Check(error); }
         if (_handle == IntPtr.Zero) throw new InvalidOperationException("アップサンプリングを初期化できません。");
     }
 

@@ -103,7 +103,7 @@
         <StackPanel>
           <TextBlock Text="{Binding OutputModeText}" Foreground="{DynamicResource AccentBrush}" FontSize="11" FontWeight="SemiBold" />
           <TextBlock Text="{Binding DeviceText}" Foreground="{DynamicResource MutedBrush}" FontSize="10" TextTrimming="CharacterEllipsis" Margin="0,5,16,0" ToolTip="{Binding DeviceText}" />
-          <TextBlock Text="{Binding OutputText}" Foreground="{DynamicResource MutedBrush}" FontSize="10" Margin="0,3,0,0" />
+          <TextBlock Text="{Binding OutputText}" Foreground="{DynamicResource MutedBrush}" FontSize="10" Margin="0,3,0,0" TextWrapping="Wrap" />
           <TextBlock x:Name="DspDetail" Text="{Binding DspDetailText}" Foreground="{DynamicResource MutedBrush}" FontSize="10" Margin="0,3,0,0" TextWrapping="Wrap" />
         </StackPanel>
         <TextBlock Grid.Column="1" Text="{Binding StatusText}" Foreground="{DynamicResource MutedBrush}" FontSize="10" VerticalAlignment="Top" />

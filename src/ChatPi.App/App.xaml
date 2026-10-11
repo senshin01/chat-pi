@@ -114,6 +114,12 @@
         <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
         <Setter Property="IsMoveToPointEnabled" Value="True" />
       </Style>
+      <Style TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      </Style>
+      <Style TargetType="Expander">
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+      </Style>
       <BooleanToVisibilityConverter x:Key="BoolVisibility" />
     </ResourceDictionary>
   </Application.Resources>

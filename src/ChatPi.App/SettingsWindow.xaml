@@ -6,7 +6,7 @@
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
   <Grid Margin="26">
     <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer x:Name="SettingsScroll" VerticalScrollBarVisibility="Auto">
       <StackPanel>
         <TextBlock Text="設定" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,6" />
         <TextBlock Text="出力と音声処理を、自分に合わせて。" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,24" />

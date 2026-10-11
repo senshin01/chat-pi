@@ -37,6 +37,10 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     private string? _deviceName;
     private EventHandler<StoppedEventArgs>? _stoppedHandler;
     private long _playGeneration;
+    private TimeSpan? _restPosition;
+    private double _lastPreampDb;
+    private long _lastClipped, _lastUnderruns;
+    private int _lastBufferMilliseconds = 40;
 
     public event EventHandler? Changed;
     public event EventHandler<Exception>? Failed;
@@ -47,11 +51,11 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     public WaveFormat? OutputFormat => _outputFormat;
     public string? DeviceName => _deviceName;
     public TimeSpan Duration => _source?.TotalTime ?? TimeSpan.Zero;
-    public TimeSpan Position => State == PlayerState.Completed ? Duration : _provider?.Position ?? _source?.CurrentTime ?? TimeSpan.Zero;
-    public double AppliedPreampDb => _provider?.AppliedPreampDb ?? 0;
-    public long ClippedSamples => _provider?.ClippedSamples ?? 0;
-    public long BufferUnderruns => _provider?.Underruns ?? 0;
-    public int ReadAheadMilliseconds => _provider?.BufferMilliseconds ?? _settings?.ReadAheadMilliseconds ?? 40;
+    public TimeSpan Position => State == PlayerState.Completed ? Duration : _provider?.Position ?? _restPosition ?? _source?.CurrentTime ?? TimeSpan.Zero;
+    public double AppliedPreampDb => _provider?.AppliedPreampDb ?? _lastPreampDb;
+    public long ClippedSamples => _provider?.ClippedSamples ?? _lastClipped;
+    public long BufferUnderruns => _provider?.Underruns ?? _lastUnderruns;
+    public int ReadAheadMilliseconds => _provider?.BufferMilliseconds ?? _lastBufferMilliseconds;
 
     public void Open(string path, PlayerSettings settings, bool autoPlay = true, bool startPaused = false)
     {
@@ -81,6 +85,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         if (_source is null || State == PlayerState.Playing) return;
         if (_backend is null)
         {
+            if (_restPosition is { } position) _source.CurrentTime = position;
             if (State == PlayerState.Completed || (_source.Length > 0 && _source.Position >= _source.Length)) _source.Position = 0;
             try
             {
@@ -131,6 +136,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         DetachStoppedHandler();
         ReleaseBackend();
         _source.Position = 0;
+        _restPosition = TimeSpan.Zero;
         State = PlayerState.Stopped;
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -143,6 +149,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         DetachStoppedHandler();
         ReleaseBackend();
         _source.CurrentTime = TimeSpan.FromTicks(Math.Clamp(position.Ticks, 0, Duration.Ticks));
+        _restPosition = _source.CurrentTime;
         State = previous == PlayerState.Paused ? PlayerState.Paused : PlayerState.Stopped;
         if (previous == PlayerState.Playing && position >= Duration)
         {
@@ -188,7 +195,18 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         _provider = null;
         // Stop the device before freeing the ring; stop the worker before seeking or closing the decoder.
         try { backend?.Dispose(); }
-        finally { provider?.Dispose(); }
+        finally
+        {
+            if (provider is not null)
+            {
+                provider.Dispose();
+                _restPosition = provider.Position;
+                _lastPreampDb = provider.AppliedPreampDb;
+                _lastClipped = provider.ClippedSamples;
+                _lastUnderruns = provider.Underruns;
+                _lastBufferMilliseconds = provider.BufferMilliseconds;
+            }
+        }
     }
 
     public void Close()
@@ -202,6 +220,10 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
             _settings = null;
             _outputFormat = null;
             _deviceName = null;
+            _restPosition = null;
+            _lastPreampDb = 0;
+            _lastClipped = _lastUnderruns = 0;
+            _lastBufferMilliseconds = 40;
             _source?.Dispose();
             _source = null;
             FilePath = null;

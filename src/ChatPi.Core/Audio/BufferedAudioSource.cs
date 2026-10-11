@@ -26,6 +26,7 @@ public sealed class BufferedAudioSource : IWaveProvider, IDisposable
     private bool _disposed;
     private EqualizerChange? _pendingEqualizer;
     private double _preampDb;
+    private readonly GraphicEqualizer? _initialEqualizer;
     public WaveFormat WaveFormat { get; private set; }
     public bool DspEnabled => _settings.Dsp.Enabled;
     public double AppliedPreampDb => Volatile.Read(ref _preampDb);
@@ -48,7 +49,11 @@ public sealed class BufferedAudioSource : IWaveProvider, IDisposable
         var rate = checked(_native.WaveFormat.SampleRate * settings.Dsp.UpsamplingFactor);
         WaveFormat = DspEnabled ? new WaveFormat(rate, 32, _native.WaveFormat.Channels) : _native.WaveFormat;
         _validBits = WaveFormat.BitsPerSample;
-        if (DspEnabled) _preampDb = new GraphicEqualizer(_native.WaveFormat.SampleRate, _native.WaveFormat.Channels, settings.Dsp).AppliedPreampDb;
+        if (DspEnabled)
+        {
+            _initialEqualizer = new GraphicEqualizer(_native.WaveFormat.SampleRate, _native.WaveFormat.Channels, settings.Dsp);
+            _preampDb = _initialEqualizer.AppliedPreampDb;
+        }
     }
 
     public bool TryUpdateEqualizer(DspSettings settings)
@@ -106,7 +111,7 @@ public sealed class BufferedAudioSource : IWaveProvider, IDisposable
             var crossfadePosition = 0;
             var output = new double[256 * _settings.Dsp.UpsamplingFactor * channels];
             var packed = new byte[Math.Max(input.Length, output.Length * WaveFormat.BitsPerSample / 8)];
-            var eq = DspEnabled ? new GraphicEqualizer(_native.WaveFormat.SampleRate, channels, _settings.Dsp) : null;
+            var eq = _initialEqualizer;
             var converter = DspEnabled ? new DspSampleConverter(WaveFormat, _validBits, _settings.Dsp.DitherEnabled) : null;
             using var resampler = _settings.Dsp.UpsamplingFactor > 1
                 ? new SoxrResampler(_native.WaveFormat.SampleRate, _settings.Dsp.UpsamplingFactor, channels) : null;

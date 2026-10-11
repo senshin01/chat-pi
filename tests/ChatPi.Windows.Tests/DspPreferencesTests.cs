@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using ChatPi.App;
 using ChatPi.App.Services;
 using ChatPi.App.ViewModels;
@@ -49,6 +51,13 @@ public sealed class DspPreferencesTests
             Assert.Contains("プリアンプ -10.0 dB", model.DspDetailText);
             WpfTestHost.FlushBindings();
             Assert.Equal(model.DspDetailText, ((TextBlock)window.FindName("DspDetail")).Text);
+            foreach (var theme in new[] { PlayerTheme.Dark, PlayerTheme.Light })
+            {
+                ThemeManager.Apply(Application.Current.Resources, theme);
+                SavePreview(window, new Size(650, 540), $"player-{theme}");
+                SavePreview(settings, new Size(500, 650), $"settings-{theme}");
+                SavePreview(eq, new Size(890, 400), $"eq-{theme}");
+            }
             var output = backend.Last;
             var count = backend.Created;
             model.ApplySettings(model.Settings with { Dsp = model.Settings.Dsp with { BandGainsDb = new double[15] } });
@@ -60,6 +69,18 @@ public sealed class DspPreferencesTests
         }
         finally { eq.Close(); settings.Close(); window.Close(); Directory.Delete(directory, true); }
     });
+
+    private static void SavePreview(Window window, Size size, string name)
+    {
+        window.Measure(size); window.Arrange(new Rect(size)); window.UpdateLayout();
+        if (window is SettingsWindow settings) ((ScrollViewer)settings.FindName("SettingsScroll")).ScrollToVerticalOffset(340);
+        WpfTestHost.FlushBindings(); window.UpdateLayout();
+        var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(window);
+        var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        Directory.CreateDirectory("TestResults/UI");
+        using var file = File.Create($"TestResults/UI/{name}.png"); encoder.Save(file);
+    }
 
     private sealed class WavSources : IAudioSourceFactory { public WaveStream Open(string path) => new WaveFileReader(path); }
     private sealed class TestBackend : IPlaybackBackendFactory
