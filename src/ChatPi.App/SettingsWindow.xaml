@@ -39,7 +39,7 @@
         <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,22,0,0" Padding="0,18,0,0">
           <StackPanel>
             <TextBlock Text="ファイルの既定アプリ" FontWeight="SemiBold" />
-            <TextBlock Text="Chat Pi を候補に登録した後、Windows の設定で対応する音楽ファイルの既定アプリに選択できます。" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,7,0,12" />
+            <TextBlock Text="登録後、Windows の設定で各形式に Chat Pi を選ぶと、形式名入りのファイルアイコンを表示します。以前の版で登録済みの場合も選び直してください。" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,7,0,12" />
             <Button Content="登録して Windows の設定を開く" Click="OnRegister" HorizontalAlignment="Left" />
             <Button Content="Chat Pi の登録を解除" Click="OnUnregister" HorizontalAlignment="Left" Margin="0,8,0,0" Padding="12,6" />
             <TextBlock x:Name="AssociationNotice" TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource AccentBrush}" Margin="0,8,0,0" />
