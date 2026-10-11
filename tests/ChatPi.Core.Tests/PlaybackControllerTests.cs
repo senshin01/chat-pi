@@ -55,6 +55,21 @@ public sealed class PlaybackControllerTests : IDisposable
     }
 
     [Fact]
+    public void SeekingWhilePlayingResumesWithTheExactPcmSamplesAtTheSelectedTime()
+    {
+        _player.Open(_path, new PlayerSettings());
+        var before = _backends.Last!;
+        _player.Seek(TimeSpan.FromMilliseconds(500));
+        Assert.True(before.Disposed);
+        Assert.Equal(PlayerState.Playing, _player.State);
+        Assert.Equal(TimeSpan.FromMilliseconds(500), _player.Position);
+        var expected = Enumerable.Range(0, 44100 * 6).Select(i => (byte)(i % 256)).Skip(22050 * 6).ToArray();
+        Assert.Equal(expected, _backends.Last!.RenderToEnd());
+        Drain();
+        Assert.Equal(PlayerState.Completed, _player.State);
+    }
+
+    [Fact]
     public void LateCallbackFromPreviousTrackCannotStopNewTrack()
     {
         _player.Open(_path, new PlayerSettings());
