@@ -54,9 +54,9 @@ public sealed class DspPreferencesTests
             foreach (var theme in new[] { PlayerTheme.Dark, PlayerTheme.Light })
             {
                 ThemeManager.Apply(Application.Current.Resources, theme);
-                SavePreview(window, new Size(650, 540), $"player-{theme}");
+                SavePreview(window, new Size(650, 560), $"player-{theme}");
                 SavePreview(settings, new Size(500, 650), $"settings-{theme}");
-                SavePreview(eq, new Size(890, 400), $"eq-{theme}");
+                SavePreview(eq, new Size(890, 460), $"eq-{theme}");
             }
             var output = backend.Last;
             var count = backend.Created;
@@ -84,7 +84,8 @@ public sealed class DspPreferencesTests
         if (window is SettingsWindow settings) ((ScrollViewer)settings.FindName("SettingsScroll")).ScrollToVerticalOffset(340);
         WpfTestHost.FlushBindings(); window.UpdateLayout();
         var content = (FrameworkElement)window.Content;
-        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth), (int)Math.Ceiling(content.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth + content.Margin.Left + content.Margin.Right),
+            (int)Math.Ceiling(content.ActualHeight + content.Margin.Top + content.Margin.Bottom), 96, 96, PixelFormats.Pbgra32);
         var background = new DrawingVisual();
         using (var drawing = background.RenderOpen()) drawing.DrawRectangle(window.Background, null, new Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
         bitmap.Render(background); bitmap.Render(content);
