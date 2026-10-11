@@ -1,4 +1,4 @@
-# PCM audio processing, v0.5.0
+# PCM audio processing, v0.6.0
 
 The raw native pipeline remains separate from the DSP pipeline. Disabling both EQ and SRC preserves the decoded integer samples and rate, including native-width expansion and mono duplication. No DSP gain or dither is applied to that path.
 
@@ -26,7 +26,24 @@ Integer samples decode directly to doubles without an intermediate float32 stage
 
 libsoxr 0.1.3 is built from the vendored unmodified archive whose SHA-256 is recorded in the build scripts and third-party README. The configuration enables CR64 and CR64S, disables float32 and variable-rate engines, OpenMP and LSR bindings, and links the Windows C runtime statically. The DLL remains separately replaceable. Source, licenses and rebuilding instructions accompany the application.
 
-Runtime settings: recipe SOXR_24_BITQ (5), SOXR_DOUBLE_PRECISION (16), linear phase, one thread, minimum DFT log2 8, large DFT log2 10. These deliberately favor smaller batches over maximum throughput. Only integer 2×/4× ratios are offered; device support is checked before the worker and device start. libsoxr compensates its filter alignment and flushes to the expected multiplied frame count.
+Runtime settings: `Standard` uses SOXR_24_BITQ (5), and `UltraHigh` uses SOXR_32_BITQ (7). Both use SOXR_DOUBLE_PRECISION (16), linear phase, one thread, minimum DFT log2 8 and large DFT log2 10. These deliberately favor smaller batches over maximum throughput; the actual FFT size may exceed the requested large size when the FIR needs it. Only integer 2×/4× ratios are offered; device support is checked before the worker and device start. libsoxr compensates its filter alignment and flushes to the expected multiplied frame count.
+
+### Ultra high
+
+`UltraHigh` selects the library's 32-bit conversion-quality preset without changing PCM decoding, EQ, headroom, output quantization or the device format. This is a filter-design precision setting, not 32-bit source information or an assertion about the DAC's effective resolution. Both libsoxr modes already use float64 arithmetic. Their preset passband ends are approximately 0.912322 / 0.910502 of input Nyquist for Standard / UltraHigh, with stopband beginning at input Nyquist; the deliberate transition region still exists. Linear-phase filters can have pre/post ringing, and the higher precision does not aim to reduce ringing like SuperSlow.
+
+With the same 256-frame stereo input blocks and `256*factor` output capacity used by the producer, the UltraHigh test observes the following amount of input read before its first output (for either 2× or 4× at 44.1/48 kHz). This is signal lookahead, not a timer delay or total hardware latency:
+
+| Input rate | Input duration before first output |
+| --- | --- |
+| 44.1 kHz | 23.220 ms |
+| 48 kHz | 21.333 ms |
+| 96 kHz | 10.667 ms |
+| 192 kHz | 5.333 ms |
+
+These observations are from the local cr64s build; tests bound lookahead to 50 ms at the tested rates and verify exact EOF length. File decoding can prepare future samples before device start, and the application retains its configurable bounded ring (40 ms by default). The higher-quality mode does not enlarge that ring or add work to the device callback. The existing 200 ms seek preroll, live EQ crossfade, current-position filter changes, repeat and shared auto headroom apply to all three filters.
+
+Reproduce spectral checks with `dotnet test tests/ChatPi.Core.Tests/ChatPi.Core.Tests.csproj -c Release --filter FullyQualifiedName~SoxrPreservesFrequencyDurationAndRejectsUpsamplingImages --logger "console;verbosity=detailed"`; reproduce small-block lookahead/processing observations with `--filter FullyQualifiedName~UltraHighTests`. CI includes these logs on Linux and Windows. Timings include managed calls and test assertions and vary with JIT, scheduling and host load; they are not application-wide CPU percentages or real-time guarantees.
 
 ### Super slow
 
@@ -47,15 +64,15 @@ Frequency-response magnitude, normalized to DC, is `[sin(pi*f/Fs) / (L*sin(pi*f/
 
 The plot uses the analytical FIR response with measured test-tone points. Regenerate it with `python scripts/plot-super-slow.py` (optional developer dependencies: NumPy and Matplotlib). Reproduce measurements with `dotnet test tests/ChatPi.Core.Tests/ChatPi.Core.Tests.csproj -c Release --filter FullyQualifiedName~SuperSlowTests --logger "console;verbosity=detailed"`. A local Linux run rendered 1 second of mono audio in about 2–3.5 ms in the test helper; that includes helper allocation and output collection and is an observation, not a CPU percentage or real-time guarantee.
 
-`Standard` remains the default for old/missing filter settings and retains the original libsoxr configuration. `Filter` is saved independently of EQ and multiplier, and applies only when SRC is enabled. Both filters share EQ, headroom, dither, device quantization, bounded buffering and ASIO/WASAPI output. Auto headroom retains the existing 3 dB SRC margin for both modes. This mode does not reproduce a specific DAC manufacturer's filter; the final response/ringing also depends on the DAC's subsequent processing.
+`Standard` remains the default for missing filter settings and retains the original libsoxr configuration; saved SuperSlow settings remain valid. Enum values 0=Standard, 1=SuperSlow, 2=UltraHigh preserve legacy numeric settings, while the settings store writes names. `Filter` is saved independently of EQ and multiplier, and applies only when SRC is enabled. All three filters share EQ, headroom, dither, device quantization, bounded buffering and ASIO/WASAPI output. Auto headroom retains the existing 3 dB SRC margin for all modes. SuperSlow does not reproduce a specific DAC manufacturer's filter; the final response/ringing also depends on the DAC's subsequent processing.
 
 ## Validation and limits
 
 Portable tests measure all 15 center gains, channel isolation, disabled low-rate bands, overlapping boosts and applied headroom, 2×/4× duration and spectral image rejection, short-file draining, effective output bits, unbiased TPDF statistics, and decoder-blocked callback behavior. The native off path is compared byte for byte. Seek, replay and live EQ update are exercised through the buffered pipeline.
 
-Super slow tests additionally verify finite positive impulse support, monotonic step response, exact DC/length/sample anchors, channel independence, fragmented blocks, EOF, seek/loop behavior, response/image agreement with the formula, zero steady-state allocation, filter persistence/defaults and unused-filter native bypass. Windows UI tests exercise the actual Apply button, active/paused filter switching, labels and restart persistence. Real FLAC is rendered through the ASIO packing callback using both filters without physical hardware.
+Super slow tests additionally verify finite positive impulse support, monotonic step response, exact DC/length/sample anchors, channel independence, fragmented blocks, EOF, seek/loop behavior, response/image agreement with the formula and zero steady-state allocation. Persistence/defaults and unused-filter native bypass also cover UltraHigh. Windows UI tests exercise the actual Apply button, active/paused filter switching, labels and restart persistence. Real FLAC, WAV and MP3 are rendered through the ASIO packing callback using UltraHigh without physical hardware.
 
-Standard SRC spectral acceptance: less than 0.001 dB amplitude error at the tested passband tones and at least 120 dB suppression of the first image, measured in double PCM before device quantization with steady-state tone projection. Test cases include 44.1/48/96 kHz inputs and high-frequency tones near 20/22 kHz. These checks are sampled cases, not a sweep guarantee for every frequency or a claim about DAC analog performance. Super slow instead follows the deliberate droop and residual images documented above. Processing times logged by tests are observations on the runner, not real-time guarantees. Windows UI tests cover persistence, applied-preamp display, live EQ without output recreation and paused rate changes.
+libsoxr spectral acceptance: less than 0.001 dB amplitude error at the tested tones and at least 120 dB (Standard) / 170 dB (UltraHigh) suppression of the first image, measured in double PCM before device quantization with steady-state tone projection. Test cases include 44.1/48/96 kHz inputs and high-frequency tones near 20/22 kHz. A local UltraHigh run measured approximately 209–226 dB first-image suppression at those specific tones; this is not a stopband-wide minimum or a promise for quantized device output. These checks are sampled cases, not a sweep guarantee for every frequency or a claim about DAC analog performance. Super slow instead follows the deliberate droop and residual images documented above. Processing times logged by tests are observations on the runner, not real-time guarantees. Windows UI tests cover persistence, applied-preamp display, live EQ without output recreation and paused rate changes.
 
 Physical ASIO/WASAPI output, actual driver rate, hardware buffering and long-running stability require the Windows checks in `windows-testing.md`.
 

@@ -51,13 +51,19 @@ public sealed class DspTests(ITestOutputHelper log)
     }
 
     [Theory]
-    [InlineData(44100, 2, 10000)] [InlineData(44100, 4, 10000)] [InlineData(48000, 2, 10000)] [InlineData(48000, 4, 10000)]
-    [InlineData(96000, 4, 10000)] [InlineData(44100, 4, 1000)] [InlineData(44100, 2, 20000)] [InlineData(48000, 4, 22000)]
-    public void SoxrPreservesFrequencyDurationAndRejectsUpsamplingImages(int rate, int factor, double frequency)
+    [InlineData(44100, 2, 10000, UpsamplingFilter.Standard)] [InlineData(44100, 4, 10000, UpsamplingFilter.Standard)]
+    [InlineData(48000, 2, 10000, UpsamplingFilter.Standard)] [InlineData(48000, 4, 10000, UpsamplingFilter.Standard)]
+    [InlineData(96000, 4, 10000, UpsamplingFilter.Standard)] [InlineData(44100, 4, 1000, UpsamplingFilter.Standard)]
+    [InlineData(44100, 2, 20000, UpsamplingFilter.Standard)] [InlineData(48000, 4, 22000, UpsamplingFilter.Standard)]
+    [InlineData(44100, 2, 10000, UpsamplingFilter.UltraHigh)] [InlineData(44100, 4, 10000, UpsamplingFilter.UltraHigh)]
+    [InlineData(48000, 2, 10000, UpsamplingFilter.UltraHigh)] [InlineData(48000, 4, 10000, UpsamplingFilter.UltraHigh)]
+    [InlineData(96000, 4, 10000, UpsamplingFilter.UltraHigh)] [InlineData(44100, 4, 1000, UpsamplingFilter.UltraHigh)]
+    [InlineData(44100, 2, 20000, UpsamplingFilter.UltraHigh)] [InlineData(48000, 4, 22000, UpsamplingFilter.UltraHigh)]
+    public void SoxrPreservesFrequencyDurationAndRejectsUpsamplingImages(int rate, int factor, double frequency, UpsamplingFilter filter)
     {
         var input = Enumerable.Range(0, rate).Select(i => .25 * Math.Sin(2 * Math.PI * frequency * i / rate)).ToArray();
         var timer = Stopwatch.StartNew();
-        var output = Resample(input, rate, factor);
+        var output = Resample(input, rate, factor, filter);
         timer.Stop();
         Assert.Equal(rate * factor, output.Length);
         var middle = output.Skip(output.Length / 4).Take(output.Length / 2).ToArray();
@@ -65,17 +71,21 @@ public sealed class DspTests(ITestOutputHelper log)
         var image = Amplitude(middle, rate - frequency, rate * factor);
         var errorDb = 20 * Math.Log10(fundamental / .25);
         var imageDb = 20 * Math.Log10(Math.Max(1e-30, image) / fundamental);
-        log.WriteLine($"{rate} x{factor}, {frequency} Hz: passband {errorDb:F7} dB, image {imageDb:F2} dB, 1s mono in {timer.Elapsed.TotalMilliseconds:F2} ms");
+        log.WriteLine($"{filter}, {rate} x{factor}, {frequency} Hz: passband {errorDb:F7} dB, image {imageDb:F2} dB, 1s mono in {timer.Elapsed.TotalMilliseconds:F2} ms");
         Assert.InRange(errorDb, -.001, .001);
-        Assert.True(imageDb < -120, $"Image rejection: {imageDb} dB");
+        Assert.True(imageDb < (filter == UpsamplingFilter.UltraHigh ? -170 : -120), $"Image rejection: {imageDb} dB");
     }
 
     [Theory]
-    [InlineData(1)] [InlineData(2)] [InlineData(257)] [InlineData(997)]
-    public void SoxrFlushesShortTracksExactlyAndKeepsChannelsIndependent(int frames)
+    [InlineData(1, UpsamplingFilter.Standard)] [InlineData(2, UpsamplingFilter.Standard)]
+    [InlineData(257, UpsamplingFilter.Standard)] [InlineData(997, UpsamplingFilter.Standard)]
+    [InlineData(1, UpsamplingFilter.UltraHigh)] [InlineData(2, UpsamplingFilter.UltraHigh)]
+    [InlineData(257, UpsamplingFilter.UltraHigh)] [InlineData(997, UpsamplingFilter.UltraHigh)]
+    public void SoxrFlushesShortTracksExactlyAndKeepsChannelsIndependent(int frames, UpsamplingFilter filter)
     {
-        using var src = new SoxrResampler(44100, 4, 2);
+        using var src = Assert.IsType<SoxrResampler>(PcmResamplers.Create(44100, 4, 2, filter));
         Assert.Contains("64", src.Engine);
+        Assert.Equal(filter == UpsamplingFilter.UltraHigh ? 32 : 24, src.PrecisionBits);
         var input = Enumerable.Range(0, frames).SelectMany(i => new[] { i == frames / 2 ? .5 : 0, 0.0 }).ToArray();
         var output = new double[256 * 2];
         var result = new List<double>();
@@ -116,12 +126,14 @@ public sealed class DspTests(ITestOutputHelper log)
     }
 
     [Theory]
-    [InlineData(1, false)] [InlineData(1, true)] [InlineData(2, false)] [InlineData(4, true)]
-    public void BufferedPipelineRetainsTimelineAndCanRestartAfterSeekAndRepeat(int factor, bool eq)
+    [InlineData(1, false, UpsamplingFilter.Standard)] [InlineData(1, true, UpsamplingFilter.Standard)]
+    [InlineData(2, false, UpsamplingFilter.Standard)] [InlineData(4, true, UpsamplingFilter.Standard)]
+    [InlineData(2, false, UpsamplingFilter.UltraHigh)] [InlineData(4, true, UpsamplingFilter.UltraHigh)]
+    public void BufferedPipelineRetainsTimelineAndCanRestartAfterSeekAndRepeat(int factor, bool eq, UpsamplingFilter filter)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "reference24.wav");
         using var stream = new WaveFileReader(path);
-        var settings = new PlayerSettings { Dsp = new DspSettings { EqualizerEnabled = eq, UpsamplingFactor = factor, DitherEnabled = false } };
+        var settings = new PlayerSettings { Dsp = new DspSettings { EqualizerEnabled = eq, UpsamplingFactor = factor, Filter = filter, DitherEnabled = false } };
         using (var source = new BufferedAudioSource(stream, settings))
         {
             source.Start();
@@ -219,15 +231,16 @@ public sealed class DspTests(ITestOutputHelper log)
         }
         return result.ToArray();
     }
-    private static double[] Resample(double[] input, int rate, int factor)
+    private static double[] Resample(double[] input, int rate, int factor, UpsamplingFilter filter)
     {
-        using var src = new SoxrResampler(rate, factor, 1);
+        using var src = PcmResamplers.Create(rate, factor, 1, filter);
         var result = new List<double>();
         var buffer = new double[1024];
         var offset = 0;
         while (offset < input.Length)
         {
             var written = src.Process(input, offset, Math.Min(257, input.Length - offset), buffer, out var used);
+            Assert.True(written > 0 || used > 0);
             result.AddRange(buffer.Take(written)); offset += used;
         }
         int count;

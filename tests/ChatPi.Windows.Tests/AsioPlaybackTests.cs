@@ -18,6 +18,12 @@ public sealed class AsioPlaybackTests
     [InlineData("tone.mp3", 2, UpsamplingFilter.Standard)]
     [InlineData("lossless16.flac", 2, UpsamplingFilter.SuperSlow)]
     [InlineData("lossless24.flac", 4, UpsamplingFilter.SuperSlow)]
+    [InlineData("lossless16.flac", 2, UpsamplingFilter.UltraHigh)]
+    [InlineData("lossless16.flac", 4, UpsamplingFilter.UltraHigh)]
+    [InlineData("lossless24.flac", 2, UpsamplingFilter.UltraHigh)]
+    [InlineData("lossless24.flac", 4, UpsamplingFilter.UltraHigh)]
+    [InlineData("reference16.wav", 4, UpsamplingFilter.UltraHigh)]
+    [InlineData("tone.mp3", 2, UpsamplingFilter.UltraHigh)]
     public void RestartAfterUpsamplingSendsExactNativeSamplesToAsioBuffers(string file, int factor, UpsamplingFilter filter)
     {
         WpfTestHost.Run(() =>

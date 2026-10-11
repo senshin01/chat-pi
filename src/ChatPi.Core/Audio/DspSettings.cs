@@ -1,6 +1,6 @@
 namespace ChatPi.Core.Audio;
 
-public enum UpsamplingFilter { Standard, SuperSlow }
+public enum UpsamplingFilter { Standard = 0, SuperSlow = 1, UltraHigh = 2 }
 
 public sealed record DspSettings
 {

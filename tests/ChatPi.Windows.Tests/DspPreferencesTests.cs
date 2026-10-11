@@ -72,8 +72,10 @@ public sealed class DspPreferencesTests
         finally { eq.Close(); settings.Close(); window.Close(); Directory.Delete(directory, true); }
     });
 
-    [Fact]
-    public void FilterSelectionAppliesPersistsAndKeepsPositionWhileOtherDspControlsStillWork() => WpfTestHost.Run(() =>
+    [Theory]
+    [InlineData(UpsamplingFilter.SuperSlow, "スーパースロー")]
+    [InlineData(UpsamplingFilter.UltraHigh, "超高精度")]
+    public void FilterSelectionAppliesPersistsAndKeepsPositionWhileOtherDspControlsStillWork(UpsamplingFilter filter, string label) => WpfTestHost.Run(() =>
     {
         var directory = Path.Combine(Path.GetTempPath(), $"chatpi-filter-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -93,24 +95,24 @@ public sealed class DspPreferencesTests
             var deviceBox = (ComboBox)settings.FindName("DeviceBox");
             deviceBox.ItemsSource = new[] { new AudioDevice(null, "Test device") }; deviceBox.SelectedIndex = 0;
             ((ComboBox)settings.FindName("UpsamplingBox")).SelectedValue = "4";
-            ((ComboBox)settings.FindName("FilterBox")).SelectedValue = "SuperSlow";
+            ((ComboBox)settings.FindName("FilterBox")).SelectedValue = filter.ToString();
             ((CheckBox)settings.FindName("EqualizerEnabledBox")).IsChecked = true;
             ((TextBox)settings.FindName("PreampBox")).Text = "-1";
             ((Button)settings.FindName("ApplyButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal("適用しました。", ((TextBlock)settings.FindName("ErrorText")).Text);
-            Assert.Equal(UpsamplingFilter.SuperSlow, store.Load().Dsp.Filter);
-            Assert.Contains("\"Filter\": \"SuperSlow\"", File.ReadAllText(Path.Combine(directory, "settings.json")));
+            Assert.Equal(filter, store.Load().Dsp.Filter);
+            Assert.Contains($"\"Filter\": \"{filter}\"", File.ReadAllText(Path.Combine(directory, "settings.json")));
             Assert.True(model.IsPlaying); Assert.Equal(.25, model.PositionSeconds);
             Assert.Equal(176400, backend.Last!.Source.WaveFormat.SampleRate);
-            Assert.Contains("フィルター スーパースロー", model.DspDetailText);
+            Assert.Contains($"フィルター {label}", model.DspDetailText);
             Assert.Contains("プリアンプ -4.0 dB", model.DspDetailText);
             WpfTestHost.FlushBindings();
             Assert.Equal(model.DspDetailText, ((TextBlock)window.FindName("DspDetail")).Text);
             foreach (var theme in new[] { PlayerTheme.Dark, PlayerTheme.Light })
             {
                 ThemeManager.Apply(Application.Current.Resources, theme);
-                SavePreview(window, new Size(650, 560), $"filter-player-{theme}");
-                SavePreview(settings, new Size(500, 650), $"filter-settings-{theme}");
+                SavePreview(window, new Size(650, 560), $"filter-player-{filter}-{theme}");
+                SavePreview(settings, new Size(500, 650), $"filter-settings-{filter}-{theme}");
             }
             var active = backend.Last;
             var gains = new double[15]; gains[8] = 6;
@@ -124,13 +126,13 @@ public sealed class DspPreferencesTests
             model.TogglePlay();
             Assert.Equal(176400, backend.Last!.Source.WaveFormat.SampleRate);
             Assert.Contains("フィルター 標準", model.DspDetailText);
-            ((ComboBox)settings.FindName("FilterBox")).SelectedValue = "SuperSlow";
+            ((ComboBox)settings.FindName("FilterBox")).SelectedValue = filter.ToString();
             ((Button)settings.FindName("ApplyButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             model.Stop();
             using var reloaded = new PlayerViewModel(new PlaybackController(new WavSources(), new TestBackend(), action => action()), store, _ => { });
-            Assert.Equal(UpsamplingFilter.SuperSlow, reloaded.Settings.Dsp.Filter);
+            Assert.Equal(filter, reloaded.Settings.Dsp.Filter);
             var reopened = new SettingsWindow(reloaded.Settings, reloaded.ApplySettings);
-            try { Assert.Equal("SuperSlow", ((ComboBox)reopened.FindName("FilterBox")).SelectedValue); }
+            try { Assert.Equal(filter.ToString(), ((ComboBox)reopened.FindName("FilterBox")).SelectedValue); }
             finally { reopened.Close(); }
         }
         finally { settings.Close(); window.Close(); Directory.Delete(directory, true); }

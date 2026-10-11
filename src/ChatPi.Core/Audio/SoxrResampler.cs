@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace ChatPi.Core.Audio;
 
-/// <summary>libsoxr 0.1.3, 24-bit quality, linear phase, double input/output/calculation.</summary>
+/// <summary>libsoxr 0.1.3, 24/32-bit quality, linear phase, double input/output/calculation.</summary>
 public sealed class SoxrResampler : IPcmResampler
 {
     private IntPtr _handle;
@@ -12,12 +12,19 @@ public sealed class SoxrResampler : IPcmResampler
     private static IntPtr Resolve(string name, Assembly assembly, DllImportSearchPath? path) => name == "chatpi_soxr"
         ? NativeLibrary.Load(Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "soxr.dll" : "libsoxr.so")) : IntPtr.Zero;
 
-    public SoxrResampler(int inputRate, int factor, int channels)
+    public SoxrResampler(int inputRate, int factor, int channels, UpsamplingFilter filter = UpsamplingFilter.Standard)
     {
         if (factor is not (2 or 4)) throw new ArgumentOutOfRangeException(nameof(factor));
+        nuint recipe = filter switch
+        {
+            UpsamplingFilter.Standard => 5, // SOXR_24_BITQ
+            UpsamplingFilter.UltraHigh => 7, // SOXR_32_BITQ
+            _ => throw new ArgumentOutOfRangeException(nameof(filter))
+        };
         _channels = channels;
         var io = IoSpec(1, 1); // SOXR_FLOAT64_I
-        var quality = QualitySpec(5, 16); // SOXR_24_BITQ | SOXR_DOUBLE_PRECISION
+        var quality = QualitySpec(recipe, 16); // SOXR_DOUBLE_PRECISION
+        PrecisionBits = quality.Precision;
         var runtime = RuntimeSpec(1);
         runtime.MinDft = 8;
         runtime.LargeDft = 10; // Avoid large FFT batches for small stereo playback blocks.
@@ -39,6 +46,7 @@ public sealed class SoxrResampler : IPcmResampler
         }
         finally { inPin.Free(); outPin.Free(); }
     }
+    public double PrecisionBits { get; }
     public string Engine => Marshal.PtrToStringAnsi(EngineNative(_handle)) ?? "unknown";
     public double PendingOutputFrames => Delay(_handle);
     private static void Check(IntPtr error)

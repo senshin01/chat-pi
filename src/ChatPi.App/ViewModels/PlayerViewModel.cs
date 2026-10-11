@@ -85,9 +85,16 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
     public int SourceSampleRate => _player.SourceFormat?.SampleRate ?? 44100;
     public string DspDetailText => _player.OutputFormat is null ? "" :
         $"プリアンプ {_player.AppliedPreampDb:0.0} dB · 先読み {_player.ReadAheadMilliseconds} ms" +
-        (Settings.Dsp.UpsamplingFactor > 1 ? $" · フィルター {(Settings.Dsp.Filter == UpsamplingFilter.Standard ? "標準" : "スーパースロー")}" : "") +
+        (Settings.Dsp.UpsamplingFactor > 1 ? $" · フィルター {FilterName}" : "") +
         (_player.ClippedSamples > 0 ? $" · ピーク超過 {_player.ClippedSamples:N0}" : "") +
         (_player.BufferUnderruns > 0 ? $" · バッファ不足 {_player.BufferUnderruns:N0}" : "");
+    private string FilterName => Settings.Dsp.Filter switch
+    {
+        UpsamplingFilter.Standard => "標準",
+        UpsamplingFilter.UltraHigh => "超高精度",
+        UpsamplingFilter.SuperSlow => "スーパースロー",
+        _ => throw new ArgumentOutOfRangeException(nameof(Settings.Dsp.Filter))
+    };
     public string StatusText => _player.State switch
     {
         PlayerState.Playing => "再生中",
