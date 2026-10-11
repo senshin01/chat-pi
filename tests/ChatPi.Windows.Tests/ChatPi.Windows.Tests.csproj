@@ -18,6 +18,7 @@
     <Using Include="Xunit" />
     <Using Include="System.IO" />
     <Content Include="Fixtures/tone.mp3" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../Fixtures/*" Link="Fixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="../ChatPi.Core.Tests/SingleInstanceTests.cs" Link="Integration/SingleInstanceTests.cs" />
   </ItemGroup>
 </Project>

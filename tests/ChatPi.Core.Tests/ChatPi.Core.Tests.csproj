@@ -13,6 +13,7 @@
     </PackageReference>
     <ProjectReference Include="../../src/ChatPi.Core/ChatPi.Core.csproj" />
     <Using Include="Xunit" />
+    <Content Include="../Fixtures/*" Link="Fixtures/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="../../src/ChatPi.App/Services/SingleInstanceHost.cs" Link="Integration/SingleInstanceHost.cs" />
   </ItemGroup>
 </Project>

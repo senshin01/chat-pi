@@ -8,6 +8,12 @@
         "resolved": "2.3.0",
         "contentHash": "jMd7r6dB6tAtXhOYL58ntPqwERNm1/Rhw5MKOIYvsnXzuX+PTGsa2VMam6n0npZYSwlSidKa4GAm4bFcXFUlcg=="
       },
+      "NVorbis": {
+        "type": "Direct",
+        "requested": "[1.0.0-rc.2, )",
+        "resolved": "1.0.0-rc.2",
+        "contentHash": "/X+5SlKt4bhzaCeADCs5BIiffvJisvWoaLdcneRHoAA2CE7c+HIVHT9JCAMiH0EIotd7JQ0luna+2/7A5gFwAQ=="
+      },
       "TagLibSharp": {
         "type": "Direct",
         "requested": "[2.3.0, )",

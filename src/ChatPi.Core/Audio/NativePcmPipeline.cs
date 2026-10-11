@@ -15,7 +15,7 @@ public static class NativePcmPipeline
             throw new NotSupportedException("初期版はモノラル／ステレオに対応しています。");
         if (!((format.Encoding == WaveFormatEncoding.Pcm && format.BitsPerSample is 8 or 16 or 24 or 32) ||
               (format.Encoding == WaveFormatEncoding.IeeeFloat && format.BitsPerSample == 32)))
-            throw new NotSupportedException("WAV は PCM 8/16/24/32 bit または float 32 bit に対応しています。");
+            throw new NotSupportedException("デコード後の音声は PCM 8/16/24/32 bit または float 32 bit に対応しています。");
 
         IWaveProvider provider = new FormatOverrideProvider(source, format);
         // An exact integer conversion allows 8-bit WAVs to use ordinary device formats.

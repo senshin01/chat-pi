@@ -37,7 +37,7 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
 
     public PlayerSettings Settings { get; private set; }
     public string Title => _track?.Title ?? "音楽を、ただ再生する。";
-    public string Artist => _track?.Artist ?? "MP3 / WAV";
+    public string Artist => _track?.Artist ?? AudioFiles.FormatSummary;
     public string Album => _track?.Album ?? "ファイルを開くか、この画面にドロップ";
     public ImageSource? Artwork => _artwork;
     public bool HasArtwork => _artwork is not null;

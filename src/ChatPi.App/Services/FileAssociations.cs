@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Win32;
 using System.Runtime.InteropServices;
+using ChatPi.Core;
 
 namespace ChatPi.App.Services;
 
@@ -27,7 +28,7 @@ internal static class FileAssociations
         capabilities.SetValue("ApplicationDescription", "WASAPI / ASIO music player");
         using (var associations = capabilities.CreateSubKey("FileAssociations"))
         {
-            foreach (var extension in new[] { ".mp3", ".wav" })
+            foreach (var extension in AudioFiles.Extensions)
             {
                 associations.SetValue(extension, ProgId);
                 using var openWith = Registry.CurrentUser.CreateSubKey($@"Software\Classes\{extension}\OpenWithProgids");
@@ -47,7 +48,7 @@ internal static class FileAssociations
         Registry.CurrentUser.DeleteSubKeyTree(@"Software\ChatPi", throwOnMissingSubKey: false);
         using (var registered = Registry.CurrentUser.OpenSubKey(@"Software\RegisteredApplications", writable: true))
             registered?.DeleteValue("Chat Pi", throwOnMissingValue: false);
-        foreach (var extension in new[] { ".mp3", ".wav" })
+        foreach (var extension in AudioFiles.Extensions)
         {
             using var openWith = Registry.CurrentUser.OpenSubKey($@"Software\Classes\{extension}\OpenWithProgids", writable: true);
             openWith?.DeleteValue(ProgId, throwOnMissingValue: false);
