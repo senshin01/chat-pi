@@ -16,6 +16,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - run: bash scripts/build-soxr.sh
       - run: dotnet restore tests/ChatPi.Core.Tests/ChatPi.Core.Tests.csproj --locked-mode
       - run: dotnet test tests/ChatPi.Core.Tests/ChatPi.Core.Tests.csproj -c Release --no-restore
 
@@ -26,6 +27,7 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
+      - run: ./scripts/build-soxr.ps1
       - run: dotnet restore ChatPi.sln --locked-mode
       - run: dotnet build ChatPi.sln -c Release --no-restore
       - run: dotnet test tests/ChatPi.Core.Tests/ChatPi.Core.Tests.csproj -c Release --no-build --no-restore

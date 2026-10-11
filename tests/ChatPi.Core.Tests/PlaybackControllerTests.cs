@@ -261,7 +261,13 @@ public sealed class PlaybackControllerTests : IDisposable
             using var output = new MemoryStream();
             var buffer = new byte[_source!.WaveFormat.BlockAlign * 257];
             int read;
-            while ((read = _source.Read(buffer, 0, buffer.Length)) != 0) output.Write(buffer, 0, read);
+            while (true)
+            {
+                if (_source is BufferedAudioSource prepared) prepared.WaitForData(buffer.Length);
+                read = _source.Read(buffer, 0, buffer.Length);
+                if (read == 0) break;
+                output.Write(buffer, 0, read);
+            }
             Complete();
             return output.ToArray();
         }

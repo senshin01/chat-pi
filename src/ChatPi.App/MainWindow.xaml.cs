@@ -67,7 +67,7 @@ public partial class MainWindow : Window
     private void OnToggleRepeat(object? sender, RoutedEventArgs args) => _model.ToggleRepeat();
     private void OnSettings(object? sender, RoutedEventArgs args)
     {
-        var dialog = new SettingsWindow(_model.Settings, _model.ApplySettings) { Owner = this };
+        var dialog = new SettingsWindow(_model.Settings, _model.ApplySettings, _model.SourceSampleRate) { Owner = this };
         dialog.ShowDialog();
     }
     private void OnDragOver(object sender, DragEventArgs args)

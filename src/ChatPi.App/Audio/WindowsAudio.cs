@@ -73,6 +73,19 @@ public sealed class WindowsAudioBackendFactory : IPlaybackBackendFactory
             var exclusive = settings.OutputMode == OutputMode.WasapiExclusive;
             if (device.State != DeviceState.Active)
                 throw new InvalidOperationException("選択した出力デバイスは接続されていません。");
+            if (source is BufferedAudioSource buffered)
+            {
+                buffered.RequireDeviceFrames(source.WaveFormat.SampleRate * settings.LatencyMilliseconds / 1000);
+                if (buffered.DspEnabled)
+                {
+                    var candidates = new[] { 32, 24, 16 }.Select(bits => new WaveFormat(source.WaveFormat.SampleRate, bits, source.WaveFormat.Channels))
+                        .Append(WaveFormat.CreateIeeeFloatWaveFormat(source.WaveFormat.SampleRate, source.WaveFormat.Channels));
+                    var chosen = exclusive ? candidates.FirstOrDefault(f => device.AudioClient.IsFormatSupported(AudioClientShareMode.Exclusive, f) ||
+                        device.AudioClient.IsFormatSupported(AudioClientShareMode.Exclusive, DeviceFormats.AsExtensible(f))) : candidates.Last();
+                    if (chosen is null) throw new NotSupportedException($"デバイスは DSP 出力 {source.WaveFormat.SampleRate:N0} Hz に対応していません。アップサンプリングの倍率を下げるか、出力デバイスを変更してください。");
+                    buffered.ConfigureOutput(chosen);
+                }
+            }
             if (exclusive)
             {
                 // Reject unsupported formats before NAudio can choose a resampling fallback.
@@ -119,7 +132,7 @@ public sealed class WindowsAudioBackendFactory : IPlaybackBackendFactory
             try { driver = new AsioDriverExt(basicDriver); }
             catch { basicDriver.ReleaseComAsioDriver(); throw; }
             if (!driver.IsSampleRateSupported(source.WaveFormat.SampleRate))
-                throw new NotSupportedException($"ASIO ドライバーは {source.WaveFormat.SampleRate:N0} Hz に対応していません。初期版では自動リサンプリングを行いません。");
+                throw new NotSupportedException($"ASIO ドライバーは {source.WaveFormat.SampleRate:N0} Hz に対応していません。アップサンプリングの倍率を下げるか、別のドライバーを選択してください。");
             if (settings.AsioChannelOffset + source.WaveFormat.Channels > driver.Capabilities.NbOutputChannels)
                 throw new InvalidOperationException("指定した ASIO 出力チャンネルがありません。設定の開始チャンネルを確認してください。");
             if (driver.Capabilities.SampleRate != source.WaveFormat.SampleRate)

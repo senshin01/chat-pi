@@ -31,7 +31,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
 {
     private WaveStream? _source;
     private PlaybackBackend? _backend;
-    private IWaveProvider? _provider;
+    private BufferedAudioSource? _provider;
     private PlayerSettings? _settings;
     private WaveFormat? _outputFormat;
     private string? _deviceName;
@@ -47,9 +47,13 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     public WaveFormat? OutputFormat => _outputFormat;
     public string? DeviceName => _deviceName;
     public TimeSpan Duration => _source?.TotalTime ?? TimeSpan.Zero;
-    public TimeSpan Position => State == PlayerState.Completed ? Duration : _source?.CurrentTime ?? TimeSpan.Zero;
+    public TimeSpan Position => State == PlayerState.Completed ? Duration : _provider?.Position ?? _source?.CurrentTime ?? TimeSpan.Zero;
+    public double AppliedPreampDb => _provider?.AppliedPreampDb ?? 0;
+    public long ClippedSamples => _provider?.ClippedSamples ?? 0;
+    public long BufferUnderruns => _provider?.Underruns ?? 0;
+    public int ReadAheadMilliseconds => _provider?.BufferMilliseconds ?? _settings?.ReadAheadMilliseconds ?? 40;
 
-    public void Open(string path, PlayerSettings settings, bool autoPlay = true)
+    public void Open(string path, PlayerSettings settings, bool autoPlay = true, bool startPaused = false)
     {
         path = AudioFiles.ValidatePath(path);
         settings.Validate();
@@ -57,11 +61,11 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         try
         {
             _source = new SynchronizedWaveStream(sources.Open(path));
-            _provider = NativePcmPipeline.Prepare(_source);
+            _ = NativePcmPipeline.Prepare(_source);
             _settings = settings;
             RepeatEnabled = settings.RepeatEnabled;
             FilePath = path;
-            State = PlayerState.Stopped;
+            State = startPaused ? PlayerState.Paused : PlayerState.Stopped;
             if (autoPlay) Play();
             else Changed?.Invoke(this, EventArgs.Empty);
         }
@@ -77,11 +81,17 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         if (_source is null || State == PlayerState.Playing) return;
         if (_backend is null)
         {
-            _backend = backends.Create(_provider!, _settings!);
-            _outputFormat = _backend.OutputFormat;
-            _deviceName = _backend.DeviceName;
+            if (State == PlayerState.Completed || (_source.Length > 0 && _source.Position >= _source.Length)) _source.Position = 0;
+            try
+            {
+                _provider = new BufferedAudioSource(_source, _settings!);
+                _backend = backends.Create(_provider, _settings!);
+                _provider.Start();
+                _outputFormat = _backend.OutputFormat;
+                _deviceName = _backend.DeviceName;
+            }
+            catch { ReleaseBackend(); throw; }
         }
-        if (State == PlayerState.Completed || _source.Position >= _source.Length) _source.Position = 0;
         DetachStoppedHandler();
         var generation = ++_playGeneration;
         _stoppedHandler = (_, args) => dispatch(() => OnPlaybackStopped(generation, args));
@@ -105,6 +115,14 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         _backend.Player.Pause();
         State = PlayerState.Paused;
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    public bool TryUpdateDsp(PlayerSettings settings)
+    {
+        if (_provider is null || !_provider.TryUpdateEqualizer(settings.Dsp)) return false;
+        _settings = settings;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
     }
 
     public void Stop()
@@ -139,7 +157,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     {
         if (generation != _playGeneration || _backend is null) return;
         var repeat = RepeatEnabled && State == PlayerState.Playing &&
-            _source is { Length: > 0 } && _source.Position >= _source.Length;
+            _source is { Length: > 0 } && _provider is { EndOfStream: true };
         DetachStoppedHandler();
         Exception? failure = args.Exception;
         try { ReleaseBackend(); }
@@ -166,7 +184,11 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     {
         var backend = _backend;
         _backend = null;
-        backend?.Dispose();
+        var provider = _provider;
+        _provider = null;
+        // Stop the device before freeing the ring; stop the worker before seeking or closing the decoder.
+        try { backend?.Dispose(); }
+        finally { provider?.Dispose(); }
     }
 
     public void Close()
