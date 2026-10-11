@@ -223,6 +223,37 @@ public sealed class PlaybackControllerTests : IDisposable
     }
 
     private void Drain() { while (_callbacks.TryDequeue(out var callback)) callback(); }
+
+    [Theory]
+    [InlineData(1, true)] [InlineData(2, false)] [InlineData(4, true)]
+    public void DspRepeatDrainsTheEntireTrackAndRestartsWithTheSameOutput(int factor, bool eq)
+    {
+        _player.Open(_path, new PlayerSettings { RepeatEnabled = true,
+            Dsp = new DspSettings { EqualizerEnabled = eq, UpsamplingFactor = factor, DitherEnabled = false } });
+        var first = _backends.Last!.RenderToEnd();
+        Assert.Equal(44100 * factor * 8, first.Length);
+        Drain();
+        Assert.Equal(PlayerState.Playing, _player.State);
+        Assert.Equal(TimeSpan.Zero, _player.Position);
+        Assert.Equal(first, _backends.Last!.RenderToEnd());
+        _player.RepeatEnabled = false;
+        Drain();
+        Assert.Equal(PlayerState.Completed, _player.State);
+        Assert.Equal(_player.Duration, _player.Position);
+    }
+
+    [Fact]
+    public void DeviceFailureRetainsConsumedFrameAndRetryDoesNotSkipReadAheadAudio()
+    {
+        _player.Open(_path, new PlayerSettings());
+        Assert.Equal(257 * 6, _backends.Last!.RenderFrames(257).Length);
+        _backends.Last!.Complete(new IOException("Disconnected")); Drain();
+        Assert.Equal(PlayerState.Stopped, _player.State);
+        Assert.InRange(_player.Position.TotalSeconds, 257 / 44100.0 - .0000001, 257 / 44100.0 + .0000001);
+        _player.Play();
+        var expected = Enumerable.Range(257 * 6, 257 * 6).Select(i => (byte)(i % 256)).ToArray();
+        Assert.Equal(expected, _backends.Last!.RenderFrames(257));
+    }
     public void Dispose() { _player.Dispose(); Directory.Delete(_directory, recursive: true); }
 
     private sealed class WavSources : IAudioSourceFactory
@@ -270,6 +301,13 @@ public sealed class PlaybackControllerTests : IDisposable
             }
             Complete();
             return output.ToArray();
+        }
+        public byte[] RenderFrames(int frames)
+        {
+            var buffer = new byte[frames * _source!.WaveFormat.BlockAlign];
+            if (_source is BufferedAudioSource prepared) prepared.WaitForData(buffer.Length);
+            var read = _source.Read(buffer, 0, buffer.Length);
+            return buffer[..read];
         }
         public void Dispose() => Disposed = true;
     }

@@ -32,6 +32,7 @@ public sealed class BufferedAudioSource : IWaveProvider, IDisposable
     public double AppliedPreampDb => Volatile.Read(ref _preampDb);
     public TimeSpan Position => TimeSpan.FromSeconds(_startFrame / (double)_stream.WaveFormat.SampleRate +
         Volatile.Read(ref _read) / (double)WaveFormat.BlockAlign / WaveFormat.SampleRate);
+    public long SourceFramePosition => _startFrame + Volatile.Read(ref _read) / WaveFormat.BlockAlign / _settings.Dsp.UpsamplingFactor;
     public long Underruns => Volatile.Read(ref _underruns);
     public long ClippedSamples => Volatile.Read(ref _clipped);
     public double Peak => Volatile.Read(ref _peak);

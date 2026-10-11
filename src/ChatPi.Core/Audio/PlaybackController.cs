@@ -37,7 +37,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     private string? _deviceName;
     private EventHandler<StoppedEventArgs>? _stoppedHandler;
     private long _playGeneration;
-    private TimeSpan? _restPosition;
+    private long? _restFrame;
     private double _lastPreampDb;
     private long _lastClipped, _lastUnderruns;
     private int _lastBufferMilliseconds = 40;
@@ -51,7 +51,8 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     public WaveFormat? OutputFormat => _outputFormat;
     public string? DeviceName => _deviceName;
     public TimeSpan Duration => _source?.TotalTime ?? TimeSpan.Zero;
-    public TimeSpan Position => State == PlayerState.Completed ? Duration : _provider?.Position ?? _restPosition ?? _source?.CurrentTime ?? TimeSpan.Zero;
+    public TimeSpan Position => State == PlayerState.Completed ? Duration : _provider?.Position ??
+        (_restFrame is { } frame && _source is not null ? TimeSpan.FromSeconds(frame / (double)_source.WaveFormat.SampleRate) : _source?.CurrentTime ?? TimeSpan.Zero);
     public double AppliedPreampDb => _provider?.AppliedPreampDb ?? _lastPreampDb;
     public long ClippedSamples => _provider?.ClippedSamples ?? _lastClipped;
     public long BufferUnderruns => _provider?.Underruns ?? _lastUnderruns;
@@ -85,7 +86,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         if (_source is null || State == PlayerState.Playing) return;
         if (_backend is null)
         {
-            if (_restPosition is { } position) _source.CurrentTime = position;
+            if (_restFrame is { } frame) _source.Position = frame * _source.WaveFormat.BlockAlign;
             if (State == PlayerState.Completed || (_source.Length > 0 && _source.Position >= _source.Length)) _source.Position = 0;
             try
             {
@@ -136,7 +137,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         DetachStoppedHandler();
         ReleaseBackend();
         _source.Position = 0;
-        _restPosition = TimeSpan.Zero;
+        _restFrame = 0;
         State = PlayerState.Stopped;
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -149,7 +150,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         DetachStoppedHandler();
         ReleaseBackend();
         _source.CurrentTime = TimeSpan.FromTicks(Math.Clamp(position.Ticks, 0, Duration.Ticks));
-        _restPosition = _source.CurrentTime;
+        _restFrame = _source.Position / _source.WaveFormat.BlockAlign;
         State = previous == PlayerState.Paused ? PlayerState.Paused : PlayerState.Stopped;
         if (previous == PlayerState.Playing && position >= Duration)
         {
@@ -200,7 +201,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
             if (provider is not null)
             {
                 provider.Dispose();
-                _restPosition = provider.Position;
+                _restFrame = provider.SourceFramePosition;
                 _lastPreampDb = provider.AppliedPreampDb;
                 _lastClipped = provider.ClippedSamples;
                 _lastUnderruns = provider.Underruns;
@@ -220,7 +221,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
             _settings = null;
             _outputFormat = null;
             _deviceName = null;
-            _restPosition = null;
+            _restFrame = null;
             _lastPreampDb = 0;
             _lastClipped = _lastUnderruns = 0;
             _lastBufferMilliseconds = 40;
