@@ -1,4 +1,4 @@
-# PCM audio processing, v0.4.0
+# PCM audio processing, v0.4.1
 
 The raw native pipeline remains separate from the DSP pipeline. Disabling both EQ and SRC preserves the decoded integer samples and rate, including native-width expansion and mono duplication. No DSP gain or dither is applied to that path.
 
@@ -35,3 +35,11 @@ Portable tests measure all 15 center gains, channel isolation, disabled low-rate
 Spectral acceptance: less than 0.001 dB amplitude error at the tested passband tones and at least 120 dB suppression of the first image, measured in double PCM before device quantization with steady-state tone projection. Test cases include 44.1/48/96 kHz inputs and high-frequency tones near 20/22 kHz. These checks are sampled cases, not a sweep guarantee for every frequency or a claim about DAC analog performance. Processing times logged by tests are observations on the runner, not real-time guarantees. Windows UI tests cover persistence, applied-preamp display, live EQ without output recreation and paused rate changes.
 
 Physical ASIO/WASAPI output, actual driver rate, hardware buffering and long-running stability require the Windows checks in `windows-testing.md`.
+
+## ASIO clock transitions and diagnostics
+
+On a rate change, set and verify the new rate in a bufferless session, release that session, then reopen the driver before negotiating formats and creating playback buffers. Reopening is bounded to one attempt; a driver which restores its default rate on init is configured again. Matching rates avoid this extra open. Sample rate and channel types are read from the actual driver, not cached capability snapshots. Rate mismatches after setting, buffer creation or before start, and type changes during buffer creation fail explicitly.
+
+This is a compatibility measure for USB driver state across clock changes, not a confirmed diagnosis of the reported physical FLAC/native-rate silence. A hardware-free Windows regression test decodes real 16/24-bit FLAC and MP3/WAV, renders 2×/4× through the ASIO callback, saves SRC off, reloads settings, then compares the native ASIO buffers against every decoded sample. Other tests cover rejected readback, cleanup after reopening fails, default-rate restoration and format changes.
+
+`%LOCALAPPDATA%/ChatPi/audio.log` records initialization and one transfer snapshot about one second after start, plus stop/disposal. The audio callback counts bytes and nonzero packed buffers using a byte scan, with no logging, allocation or further conversion. A nonzero buffer proves prepared audio reached the app's ASIO output memory; it cannot prove hardware audibility. Logs contain metadata only and rotate at approximately 1 MiB to one previous file. Unwritable logs do not interrupt playback.

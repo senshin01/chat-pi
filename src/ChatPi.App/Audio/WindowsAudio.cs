@@ -3,7 +3,6 @@ using ChatPi.Core;
 using ChatPi.Core.Audio;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
-using NAudio.Wave.Asio;
 
 namespace ChatPi.App.Audio;
 
@@ -125,24 +124,20 @@ public sealed class WindowsAudioBackendFactory : IPlaybackBackendFactory
     {
         if (!GetAsioDrivers().Contains(settings.AsioDriverName, StringComparer.Ordinal))
             throw new InvalidOperationException("選択した ASIO ドライバーがありません。メーカー提供の 64 bit ASIO ドライバーをインストールし、設定で選択してください。");
-        AsioDriverExt? driver = null;
+        IAsioDriverSession? driver = null;
         try
         {
-            var basicDriver = AsioDriver.GetAsioDriverByName(settings.AsioDriverName!);
-            try { driver = new AsioDriverExt(basicDriver); }
-            catch { basicDriver.ReleaseComAsioDriver(); throw; }
-            if (!driver.IsSampleRateSupported(source.WaveFormat.SampleRate))
-                throw new NotSupportedException($"ASIO ドライバーは {source.WaveFormat.SampleRate:N0} Hz に対応していません。アップサンプリングの倍率を下げるか、別のドライバーを選択してください。");
-            if (settings.AsioChannelOffset + source.WaveFormat.Channels > driver.Capabilities.NbOutputChannels)
-                throw new InvalidOperationException("指定した ASIO 出力チャンネルがありません。設定の開始チャンネルを確認してください。");
-            if (driver.Capabilities.SampleRate != source.WaveFormat.SampleRate)
-                driver.SetSampleRate(source.WaveFormat.SampleRate);
-            var player = new AsioPlaybackOutput(driver, source, settings.AsioChannelOffset);
+            var diagnostic = AudioDiagnostics.Default;
+            diagnostic.Write($"driver={settings.AsioDriverName} EQ={settings.Dsp.EqualizerEnabled} SRC={settings.Dsp.UpsamplingFactor}");
+            driver = AsioDriverSession.Open(() => new AsioDriverSession(settings.AsioDriverName!),
+                source.WaveFormat.SampleRate, settings.AsioChannelOffset, source.WaveFormat.Channels, diagnostic.Write);
+            var player = new AsioPlaybackOutput(driver, source, settings.AsioChannelOffset, diagnostic.Write);
             return new PlaybackBackend(player, player.OutputWaveFormat, settings.AsioDriverName!);
         }
-        catch
+        catch (Exception exception)
         {
-            driver?.ReleaseDriver();
+            AudioDiagnostics.Default.Write($"initialization failed: {exception.GetType().Name}: {exception.Message}");
+            driver?.Dispose();
             throw;
         }
     }
