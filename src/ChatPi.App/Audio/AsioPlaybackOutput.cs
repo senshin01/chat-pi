@@ -27,6 +27,8 @@ internal sealed class AsioPlaybackOutput : IWavePlayer
     private bool _disposed;
     private readonly Action<string> _diagnostic;
     private long _callbacks, _nonZeroBuffers, _bytesRead;
+    private readonly long _callbackBudgetTicks;
+    private long _maxCallbackTicks, _callbackOverBudget;
     private long _startedAt;
     private bool _reportTransfer;
 
@@ -51,6 +53,7 @@ internal sealed class AsioPlaybackOutput : IWavePlayer
             : new WaveFormat(source.WaveFormat.SampleRate, formats[0].ValidBits, source.WaveFormat.Channels);
         _frames = driver.CreateBuffers(source.WaveFormat.Channels, channelOffset);
         if (_frames <= 0) throw new InvalidOperationException("ASIO バッファサイズが不正です。");
+        _callbackBudgetTicks = (long)Math.Ceiling(_frames * (double)Stopwatch.Frequency / source.WaveFormat.SampleRate);
         AsioDriverSession.VerifyRate(driver, source.WaveFormat.SampleRate);
         for (var channel = 0; channel < types.Length; channel++)
             if (driver.GetOutputType(channelOffset + channel) != types[channel])
@@ -60,7 +63,7 @@ internal sealed class AsioPlaybackOutput : IWavePlayer
         _channels = formats.Select(format => new byte[_frames * format.ContainerBytes]).ToArray();
         driver.FillBuffer = FillBuffer;
         driver.ResetRequest = OnDriverReset;
-        diagnostic($"prepared source={source.WaveFormat.Encoding}/{source.WaveFormat.SampleRate}/{source.WaveFormat.BitsPerSample}/{source.WaveFormat.Channels} output={types[0]} frames={_frames} channelOffset={channelOffset}");
+        diagnostic(FormattableString.Invariant($"prepared source={source.WaveFormat.Encoding}/{source.WaveFormat.SampleRate}/{source.WaveFormat.BitsPerSample}/{source.WaveFormat.Channels} output={types[0]} frames={_frames} periodMs={1000.0 * _frames / source.WaveFormat.SampleRate:F3} channelOffset={channelOffset}"));
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(30) };
         _timer.Tick += OnTick;
     }
@@ -115,6 +118,7 @@ internal sealed class AsioPlaybackOutput : IWavePlayer
 
     private void FillBuffer(IntPtr[] inputs, IntPtr[] outputs)
     {
+        var started = Stopwatch.GetTimestamp();
         try
         {
             var read = Volatile.Read(ref _failure) is null ? _source.Read(_interleaved, 0, _interleaved.Length) : 0;
@@ -150,6 +154,14 @@ internal sealed class AsioPlaybackOutput : IWavePlayer
             }
             catch (Exception silenceFailure) { Volatile.Write(ref _failure, silenceFailure); }
         }
+        finally
+        {
+            // ASIO serializes callbacks. Timing includes scheduler/GC pauses while this
+            // method is active; it does not observe driver/USB underruns or audio quality.
+            var elapsed = Stopwatch.GetTimestamp() - started;
+            if (elapsed > Interlocked.Read(ref _maxCallbackTicks)) Interlocked.Exchange(ref _maxCallbackTicks, elapsed);
+            if (elapsed > _callbackBudgetTicks) Interlocked.Increment(ref _callbackOverBudget);
+        }
     }
 
     private void OnTick(object? sender, EventArgs args)
@@ -176,7 +188,8 @@ internal sealed class AsioPlaybackOutput : IWavePlayer
         if (!_disposed)
             StopWithReason(new InvalidOperationException("ASIO ドライバーの設定が変更されました。音楽ファイルを開き直して再初期化してください。"));
     });
-    private void ReportTransfer(string reason) => _diagnostic($"{reason} callbacks={Interlocked.Read(ref _callbacks)} bytes={Interlocked.Read(ref _bytesRead)} nonzeroBuffers={Interlocked.Read(ref _nonZeroBuffers)} underruns={(_source as BufferedAudioSource)?.Underruns ?? 0}");
+    private void ReportTransfer(string reason) => _diagnostic(FormattableString.Invariant(
+        $"{reason} callbacks={Interlocked.Read(ref _callbacks)} bytes={Interlocked.Read(ref _bytesRead)} nonzeroBuffers={Interlocked.Read(ref _nonZeroBuffers)} underruns={(_source as BufferedAudioSource)?.Underruns ?? 0} clipped={(_source as BufferedAudioSource)?.ClippedSamples ?? 0} callbackMaxMs={1000.0 * Interlocked.Read(ref _maxCallbackTicks) / Stopwatch.Frequency:F3} callbackOverBudget={Interlocked.Read(ref _callbackOverBudget)}"));
     public void Dispose()
     {
         if (_disposed) return;

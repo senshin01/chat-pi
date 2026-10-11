@@ -197,6 +197,56 @@ public sealed class AsioPlaybackTests
         });
     }
 
+    [Fact]
+    public void SlowCallbackIsReportedSeparatelyFromPreparedBufferUnderruns()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var messages = new List<string>();
+            var state = new DriverState { Rate = 44100 };
+            using var output = new AsioPlaybackOutput(new TestDriver(state), new DelayedSource(30), 0, messages.Add);
+            output.Play();
+            state.Current!.PumpWithoutCapture();
+            output.Dispose();
+            Assert.Contains(messages, m => m.Contains("frames=512 periodMs=11.610"));
+            var report = Assert.Single(messages, m => m.StartsWith("disposed ", StringComparison.Ordinal));
+            Assert.Contains("callbacks=1", report);
+            Assert.Contains("underruns=0", report);
+            Assert.Contains("callbackOverBudget=1", report);
+            var maximum = double.Parse(report.Split(' ').Single(part => part.StartsWith("callbackMaxMs=", StringComparison.Ordinal))
+                .Split('=')[1], System.Globalization.CultureInfo.InvariantCulture);
+            Assert.True(maximum >= 20, report);
+        });
+    }
+
+    [Fact]
+    public void TransferAndTimingCountersDoNotAllocateInWarmedAudioCallbacks()
+    {
+        WpfTestHost.Run(() =>
+        {
+            var state = new DriverState { Rate = 192000 };
+            using var output = new AsioPlaybackOutput(new TestDriver(state),
+                new SilenceProvider(new WaveFormat(192000, 32, 2)), 0, _ => { });
+            output.Play();
+            for (var i = 0; i < 32; i++) state.Current!.PumpWithoutCapture();
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < 128; i++) state.Current!.PumpWithoutCapture();
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.Equal(0, allocated);
+        });
+    }
+
+    private sealed class DelayedSource(int delayMilliseconds) : IWaveProvider
+    {
+        public WaveFormat WaveFormat { get; } = new(44100, 16, 2);
+        public int Read(byte[] buffer, int offset, int count)
+        {
+            Thread.Sleep(delayMilliseconds);
+            Array.Fill(buffer, (byte)1, offset, count);
+            return count;
+        }
+    }
+
     private static byte[] ReadAll(IWaveProvider source)
     {
         using var data = new MemoryStream();
@@ -244,9 +294,10 @@ public sealed class AsioPlaybackTests
         public byte[][] Pump()
         {
             Assert.NotNull(_fill);
-            _fill([], _buffers);
+            PumpWithoutCapture();
             return _buffers.Select(pointer => { var data = new byte[Frames * 4]; Marshal.Copy(pointer, data, 0, data.Length); return data; }).ToArray();
         }
+        public void PumpWithoutCapture() => _fill!([], _buffers);
         public void Dispose()
         {
             if (_disposed) return;
