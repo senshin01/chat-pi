@@ -9,6 +9,8 @@ namespace ChatPi.App.Audio;
 internal sealed class NativeMediaFoundationWaveStream : WaveStream
 {
     private const int AudioStream = MediaFoundationInterop.MF_SOURCE_READER_FIRST_AUDIO_STREAM;
+    // MP4 sources expose this native ALAC subtype in addition to the WAVE-tag GUID.
+    private static readonly Guid Mp4Alac = new("616c6163-767a-494d-b478-f29d25dc9037");
     private readonly string _path;
     private IMFSourceReader? _reader;
     private long _length;
@@ -56,12 +58,13 @@ internal sealed class NativeMediaFoundationWaveStream : WaveStream
             {
                 var type = new MediaType(native);
                 var subtype = type.SubType;
-                var lossless = subtype == AudioSubtypes.MFAudioFormat_FLAC || subtype == AudioSubtypes.MFAudioFormat_ALAC ||
+                var alac = subtype == AudioSubtypes.MFAudioFormat_ALAC || subtype == Mp4Alac;
+                var lossless = subtype == AudioSubtypes.MFAudioFormat_FLAC || alac ||
                     subtype == AudioSubtypes.MFAudioFormat_WMAudio_Lossless;
                 var allowed = Path.GetExtension(_path).ToLowerInvariant() switch
                 {
                     ".flac" => subtype == AudioSubtypes.MFAudioFormat_FLAC,
-                    ".m4a" => subtype == AudioSubtypes.MFAudioFormat_ALAC || subtype == AudioSubtypes.MFAudioFormat_AAC,
+                    ".m4a" => alac || subtype == AudioSubtypes.MFAudioFormat_AAC,
                     ".aac" => subtype == AudioSubtypes.MFAudioFormat_AAC || subtype == AudioSubtypes.MFAudioFormat_ADTS || subtype == AudioSubtypes.MEDIASUBTYPE_RAW_AAC1,
                     ".wma" => subtype == AudioSubtypes.MFAudioFormat_WMAudioV8 || subtype == AudioSubtypes.MFAudioFormat_WMAudioV9 || subtype == AudioSubtypes.MFAudioFormat_WMAudio_Lossless,
                     _ => false
@@ -69,7 +72,7 @@ internal sealed class NativeMediaFoundationWaveStream : WaveStream
                 if (!allowed) throw new NotSupportedException($"このコンテナー内の音声コーデックは未対応です ({subtype})。DRM / DSD / 動画は対象外です。");
                 if (type.ChannelCount is < 1 or > 2) throw new NotSupportedException("モノラル／ステレオの音声に対応しています。");
                 var minimumBits = type.TryGetUInt32(MediaFoundationAttributes.MF_MT_AUDIO_BITS_PER_SAMPLE, 24);
-                if (subtype == AudioSubtypes.MFAudioFormat_ALAC) minimumBits = Math.Max(24, minimumBits);
+                if (alac) minimumBits = Math.Max(24, minimumBits);
                 if (subtype == AudioSubtypes.MFAudioFormat_FLAC)
                 {
                     using var input = File.OpenRead(_path);
