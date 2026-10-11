@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using ChatPi.App.Audio;
+using ChatPi.App.Services;
 using ChatPi.App.ViewModels;
 using ChatPi.Core;
 using ChatPi.Core.Audio;
@@ -23,7 +24,12 @@ public partial class MainWindow : Window
         var settingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ChatPi", "settings.json");
         var player = new PlaybackController(new WindowsAudioSourceFactory(), new WindowsAudioBackendFactory(),
             action => Dispatcher.BeginInvoke(action));
-        _model = new PlayerViewModel(player, new SettingsStore(settingsPath));
+        _model = new PlayerViewModel(player, new SettingsStore(settingsPath), theme =>
+        {
+            ThemeManager.Apply(Application.Current.Resources, theme);
+            ThemeManager.ApplyWindowTheme(this, theme);
+        });
+        SourceInitialized += (_, _) => ThemeManager.ApplyWindowTheme(this, _model.Settings.Theme);
         DataContext = _model;
         _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
         _timer.Tick += (_, _) => { if (!_seeking) _model.RefreshProgress(); };
@@ -39,6 +45,7 @@ public partial class MainWindow : Window
     }
     private void OnTogglePlay(object? sender, RoutedEventArgs args) => _model.TogglePlay();
     private void OnStop(object? sender, RoutedEventArgs args) => _model.Stop();
+    private void OnToggleRepeat(object? sender, RoutedEventArgs args) => _model.ToggleRepeat();
     private void OnSettings(object? sender, RoutedEventArgs args)
     {
         var dialog = new SettingsWindow(_model.Settings, _model.ApplySettings) { Owner = this };

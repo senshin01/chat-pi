@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 namespace ChatPi.Core;
 
 public enum OutputMode { WasapiExclusive, WasapiShared, Asio }
+public enum PlayerTheme { Dark, Light }
 
 public sealed record PlayerSettings
 {
@@ -12,11 +13,15 @@ public sealed record PlayerSettings
     public string? AsioDriverName { get; init; }
     public int LatencyMilliseconds { get; init; } = 100;
     public int AsioChannelOffset { get; init; }
+    public bool RepeatEnabled { get; init; }
+    public PlayerTheme Theme { get; init; } = PlayerTheme.Dark;
 
     public void Validate()
     {
         if (!Enum.IsDefined(OutputMode))
             throw new ArgumentException("出力モードが不正です。");
+        if (!Enum.IsDefined(Theme))
+            throw new ArgumentException("テーマが不正です。");
         if (LatencyMilliseconds is < 20 or > 500)
             throw new ArgumentException("WASAPI バッファは 20〜500 ms にしてください。");
         if (AsioChannelOffset is < 0 or > 126)

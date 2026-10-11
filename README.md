@@ -1,7 +1,7 @@
 # Chat Pi
 
 Windows 向けの、とてもシンプルな WASAPI / ASIO 音楽プレイヤーです。
-**初期版 v0.1** は、1 ファイルを開いて再生する基本機能に絞っています。
+**v0.2** は、1 ファイルを開いて再生する基本機能に絞っています。
 
 ## できること
 
@@ -11,6 +11,8 @@ Windows 向けの、とてもシンプルな WASAPI / ASIO 音楽プレイヤー
 - タイトル、アーティスト、アルバム、埋め込みジャケットの表示。
 - MP3 / WAV の既定アプリ候補へのユーザー単位の登録・解除。
 - 別のファイルを開くと、既に起動中のウィンドウで再生を切り替え。
+- 同じ曲を繰り返すリピートボタン。オン／オフを保存。
+- 設定からライト／ダークテーマを選択。選択を保存。
 
 プレイリスト、ストリーミング連携、音量調整、音量正規化、アップサンプリングはありません。
 
@@ -23,6 +25,13 @@ Windows 向けの、とてもシンプルな WASAPI / ASIO 音楽プレイヤー
 2. `ChatPi.exe` を起動します。配布フォルダーには .NET ランタイムが含まれているため、別途 .NET の導入は不要です。
 3. 右上の設定から出力モードとデバイスを選び、保存します。
 4. 「ファイルを開く」またはドラッグ＆ドロップで MP3 / WAV を開きます。
+
+再生操作の左側にある矢印のリピートボタンは、色付きの状態でオンです。
+曲が自然に終了すると先頭から再生し、停止ボタンやエラー時には再開しません。
+曲間を完全につなぐギャップレス再生は対象外です。
+設定の「テーマ」でライト／ダークを選び、保存すると画面に適用されます。
+リピートとテーマは再生を中断せずに切り替えられ、アプリを終了しても保持します。
+既存の設定ファイルも引き継ぎ、初回はリピートオフ・ダークテーマです。
 
 Windows の音楽ファイルのダブルクリックで起動するには、設定の
 「登録して Windows の設定を開く」を押し、「既定のアプリ」で Chat Pi を選び、
@@ -72,7 +81,7 @@ dotnet build ChatPi.sln -c Release --no-restore
 dotnet test tests/ChatPi.Core.Tests/ChatPi.Core.Tests.csproj -c Release --no-build --no-restore
 ```
 
-Windows ではさらに実際の MP3 デコードと単一起動のテスト、アプリの起動を行います。
+Windows ではさらに実際の MP3 デコード、単一起動、WPF のテーマと設定切り替えのテスト、アプリの起動を行います。
 
 ```powershell
 dotnet test tests/ChatPi.Windows.Tests/ChatPi.Windows.Tests.csproj -c Release --no-build --no-restore
@@ -89,7 +98,7 @@ GitHub Actions には Linux の Core テストと Windows のビルド・統合�
 - `src/ChatPi.Core`: 設定、メタデータ、再生状態、ネイティブレートの PCM パイプライン、デバイス用サンプル変換。
 - `src/ChatPi.App`: WPF 画面、Windows デコーダー、WASAPI / ASIO、単一起動、ファイル関連付け。
 - `tests/ChatPi.Core.Tests`: 実 WAV、サンプル精度、再生状態、設定・メタデータ、ファイル起動メッセージ転送のテスト。
-- `tests/ChatPi.Windows.Tests`: 実 MP3 の Windows デコードと名前付きパイプ転送の統合テスト。
+- `tests/ChatPi.Windows.Tests`: 実 MP3 の Windows デコード、名前付きパイプ転送、WPF のテーマと再生中の設定切り替えの統合テスト。
 
 アップサンプリングは、実機で基本再生を確認した後に追加します。
 `NativePcmPipeline` とデバイス出力の間に、明示設定の DSP ステージを追加できる構成です。

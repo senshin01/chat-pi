@@ -16,6 +16,8 @@ public partial class SettingsWindow : Window
         _original = settings;
         _save = save;
         InitializeComponent();
+        ThemeBox.SelectedValue = settings.Theme.ToString();
+        SourceInitialized += (_, _) => ThemeManager.ApplyWindowTheme(this, settings.Theme);
         var notices = new List<string>();
         try
         {
@@ -73,6 +75,7 @@ public partial class SettingsWindow : Window
             var settings = _original with
             {
                 OutputMode = Mode,
+                Theme = Enum.Parse<PlayerTheme>((string)ThemeBox.SelectedValue),
                 WasapiDeviceId = DeviceBox.SelectedItem is AudioDevice device ? device.Id : _original.WasapiDeviceId,
                 AsioDriverName = DriverBox.SelectedItem as string ?? _original.AsioDriverName,
                 LatencyMilliseconds = latency,
