@@ -66,7 +66,7 @@ internal sealed class NativeMediaFoundationWaveStream : WaveStream
                     ".wma" => subtype == AudioSubtypes.MFAudioFormat_WMAudioV8 || subtype == AudioSubtypes.MFAudioFormat_WMAudioV9 || subtype == AudioSubtypes.MFAudioFormat_WMAudio_Lossless,
                     _ => false
                 };
-                if (!allowed) throw new NotSupportedException("このコンテナー内の音声コーデックは未対応です。DRM / DSD / 動画は対象外です。");
+                if (!allowed) throw new NotSupportedException($"このコンテナー内の音声コーデックは未対応です ({subtype})。DRM / DSD / 動画は対象外です。");
                 if (type.ChannelCount is < 1 or > 2) throw new NotSupportedException("モノラル／ステレオの音声に対応しています。");
                 var minimumBits = type.TryGetUInt32(MediaFoundationAttributes.MF_MT_AUDIO_BITS_PER_SAMPLE, 24);
                 if (subtype == AudioSubtypes.MFAudioFormat_ALAC) minimumBits = Math.Max(24, minimumBits);
@@ -147,7 +147,11 @@ internal sealed class NativeMediaFoundationWaveStream : WaveStream
         }
         if (_pendingSeek is { } desired)
         {
-            _reader.Flush(AudioStream);
+            if (_ended)
+            {
+                Marshal.ReleaseComObject(_reader);
+                _reader = CreateReader(out _);
+            }
             var value = PropVariant.FromLong((long)((decimal)desired / WaveFormat.BlockAlign * TimeSpan.TicksPerSecond / WaveFormat.SampleRate));
             var pointer = Marshal.AllocHGlobal(Marshal.SizeOf<PropVariant>());
             try
