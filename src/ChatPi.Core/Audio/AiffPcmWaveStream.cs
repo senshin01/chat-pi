@@ -18,7 +18,7 @@ public sealed class AiffPcmWaveStream : WaveStream
             Span<byte> header = stackalloc byte[12];
             _input.ReadExactly(header);
             if (!header[..4].SequenceEqual("FORM"u8) || !header[8..].SequenceEqual("AIFF"u8))
-                throw new NotSupportedException("AIFF は非圧縮 PCM に対応しています。圧縮 AIFF-C は未対応です。");
+                throw new NotSupportedException("AIFF は非圧縮 PCM に対応しています。AIFF-C は未対応です。");
             var end = Math.Min(_input.Length, 8L + BinaryPrimitives.ReadUInt32BigEndian(header[4..]));
             long dataBytes = -1;
             uint frames = 0;

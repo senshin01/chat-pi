@@ -71,7 +71,7 @@ FLAC / ALAC は整数 PCM で展開し、24 bit 音源の下位ビットも保�
 出力用の PCM のビット幅が音源より広くなる場合がありますが、元のサンプルレートは維持します。
 AAC / MP3 / Vorbis / 通常の WMA は非可逆圧縮なので、展開後のビット幅は原音の精度を表すものではありません。
 
-DSD（`.dsf` / `.dff`）、DoP、Opus、APE、圧縮 AIFF-C、DRM 付きファイルは今回の対象外です。
+DSD（`.dsf` / `.dff`）、DoP、Opus、APE、AIFF-C、DRM 付きファイルは今回の対象外です。
 同じ拡張子でも未対応のコーデックを収録したファイルはエラーになります。
 Windows N で Media Foundation を利用するには Media Feature Pack が必要です。
 
