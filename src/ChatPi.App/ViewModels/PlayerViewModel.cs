@@ -11,21 +11,25 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly PlaybackController _player;
     private readonly SettingsStore _store;
+    private readonly Action<PlayerTheme> _applyTheme;
     private TrackMetadata? _track;
     private string? _lastPath;
     private ImageSource? _artwork;
     private string? _error;
 
-    public PlayerViewModel(PlaybackController player, SettingsStore store)
+    public PlayerViewModel(PlaybackController player, SettingsStore store, Action<PlayerTheme> applyTheme)
     {
         _player = player;
         _store = store;
+        _applyTheme = applyTheme;
         try { Settings = store.Load(); }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or System.Text.Json.JsonException or ArgumentException or InvalidDataException)
         {
             Settings = new PlayerSettings();
             _error = $"設定を読み込めませんでした。既定設定を使用します。{exception.Message}";
         }
+        _player.RepeatEnabled = Settings.RepeatEnabled;
+        _applyTheme(Settings.Theme);
         _player.Changed += OnPlayerChanged;
         _player.Failed += OnPlayerFailed;
     }
@@ -42,6 +46,8 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
     public string PlayLabel => _player.State == PlayerState.Playing ? "一時停止" : "再生";
     public bool IsPlaying => _player.State == PlayerState.Playing;
     public bool IsNotPlaying => !IsPlaying;
+    public bool RepeatEnabled => Settings.RepeatEnabled;
+    public string RepeatLabel => RepeatEnabled ? "リピート: オン" : "リピート: オフ";
     public string PositionText => FormatTime(_player.Position);
     public string DurationText => FormatTime(_player.Duration);
     public double PositionSeconds => _player.Position.TotalSeconds;
@@ -92,16 +98,21 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
     });
 
     public void Stop() => Try(_player.Stop);
+    public void ToggleRepeat() => Try(() => ApplySettings(Settings with { RepeatEnabled = !RepeatEnabled }));
     public void Seek(double seconds) => Try(() => _player.Seek(TimeSpan.FromSeconds(seconds)));
 
     public void ApplySettings(PlayerSettings settings)
     {
         settings.Validate();
+        var outputChanged = (settings with { RepeatEnabled = Settings.RepeatEnabled, Theme = Settings.Theme }) != Settings;
+        var themeChanged = settings.Theme != Settings.Theme;
         _store.Save(settings);
         Settings = settings;
+        _player.RepeatEnabled = settings.RepeatEnabled;
+        if (themeChanged) _applyTheme(settings.Theme);
         var position = _player.Position;
         var wasPlaying = IsPlaying;
-        if (_lastPath is not null)
+        if (outputChanged && _lastPath is not null)
         {
             Try(() =>
             {

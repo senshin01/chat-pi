@@ -13,7 +13,7 @@ public sealed class SettingsAndMetadataTests : IDisposable
         var path = Path.Combine(_directory, "settings.json");
         var store = new SettingsStore(path);
         Assert.Equal(OutputMode.WasapiExclusive, store.Load().OutputMode);
-        var settings = new PlayerSettings { OutputMode = OutputMode.Asio, AsioDriverName = "Example ASIO", AsioChannelOffset = 2, WasapiDeviceId = "device-id" };
+        var settings = new PlayerSettings { OutputMode = OutputMode.Asio, AsioDriverName = "Example ASIO", AsioChannelOffset = 2, WasapiDeviceId = "device-id", RepeatEnabled = true, Theme = PlayerTheme.Light };
         store.Save(settings);
         Assert.Equal(settings, store.Load());
         store.Save(settings with { LatencyMilliseconds = 200 });
@@ -29,6 +29,29 @@ public sealed class SettingsAndMetadataTests : IDisposable
         Assert.Throws<ArgumentException>(() => store.Save(new PlayerSettings { LatencyMilliseconds = 0 }));
         Assert.Equal(100, store.Load().LatencyMilliseconds);
         Assert.Throws<ArgumentException>(() => store.Save(new PlayerSettings { OutputMode = OutputMode.Asio }));
+        Assert.Throws<ArgumentException>(() => store.Save(new PlayerSettings { Theme = (PlayerTheme)99 }));
+        Assert.Equal(PlayerTheme.Dark, store.Load().Theme);
+    }
+
+    [Fact]
+    public void ExistingSettingsLoadWithRepeatOffAndDarkThemeWithoutLosingAsioSelection()
+    {
+        var path = Path.Combine(_directory, "settings.json");
+        File.WriteAllText(path, """
+            { "OutputMode": "Asio", "AsioDriverName": "Existing ASIO", "AsioChannelOffset": 2, "LatencyMilliseconds": 100 }
+            """);
+        var store = new SettingsStore(path);
+        var settings = store.Load();
+        Assert.False(settings.RepeatEnabled);
+        Assert.Equal(PlayerTheme.Dark, settings.Theme);
+        Assert.Equal("Existing ASIO", settings.AsioDriverName);
+        store.Save(settings with { Theme = PlayerTheme.Light, RepeatEnabled = true });
+        var reloaded = new SettingsStore(path).Load();
+        Assert.True(reloaded.RepeatEnabled);
+        Assert.Equal(PlayerTheme.Light, reloaded.Theme);
+        Assert.Equal(settings.OutputMode, reloaded.OutputMode);
+        Assert.Equal(settings.AsioDriverName, reloaded.AsioDriverName);
+        Assert.Equal(settings.AsioChannelOffset, reloaded.AsioChannelOffset);
     }
 
     [Fact]

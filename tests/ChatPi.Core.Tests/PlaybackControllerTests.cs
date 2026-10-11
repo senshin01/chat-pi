@@ -120,6 +120,93 @@ public sealed class PlaybackControllerTests : IDisposable
         Assert.True(_backends.Last!.Disposed);
     }
 
+    [Fact]
+    public void RepeatRestartsAtTheBeginningAndPreservesEveryPcmSample()
+    {
+        _player.Open(_path, new PlayerSettings { RepeatEnabled = true });
+        var first = _backends.Last!;
+        var bytes = first.RenderToEnd();
+        Drain();
+        Assert.True(first.Disposed);
+        Assert.Equal(PlayerState.Playing, _player.State);
+        Assert.Equal(TimeSpan.Zero, _player.Position);
+        Assert.Equal(bytes, _backends.Last!.RenderToEnd());
+        Drain();
+        Assert.Equal(3, _backends.Players.Count);
+        Assert.Equal(44100, _player.OutputFormat!.SampleRate);
+        Assert.Equal(24, _player.OutputFormat.BitsPerSample);
+    }
+
+    [Fact]
+    public void RepeatCanBeEnabledAndDisabledWithoutRecreatingTheActiveOutput()
+    {
+        _player.Open(_path, new PlayerSettings());
+        var first = _backends.Last!;
+        _player.RepeatEnabled = true;
+        Assert.Same(first, _backends.Last);
+        first.RenderToEnd();
+        Drain();
+        Assert.Equal(PlayerState.Playing, _player.State);
+        _player.RepeatEnabled = false;
+        _backends.Last!.RenderToEnd();
+        Drain();
+        Assert.Equal(PlayerState.Completed, _player.State);
+        Assert.Equal(2, _backends.Players.Count);
+    }
+
+    [Fact]
+    public void ManualStopCancelsAQueuedRepeat()
+    {
+        _player.Open(_path, new PlayerSettings { RepeatEnabled = true });
+        _backends.Last!.RenderToEnd();
+        _player.Stop();
+        Drain();
+        Assert.Equal(PlayerState.Stopped, _player.State);
+        Assert.Equal(TimeSpan.Zero, _player.Position);
+        Assert.Single(_backends.Players);
+    }
+
+    [Fact]
+    public void RepeatDoesNotRestartADeviceFailure()
+    {
+        Exception? observed = null;
+        _player.Failed += (_, exception) => observed = exception;
+        _player.Open(_path, new PlayerSettings { RepeatEnabled = true });
+        _player.Seek(_player.Duration - TimeSpan.FromMilliseconds(1));
+        var failure = new IOException("Device disconnected");
+        _backends.Last!.Complete(failure);
+        Drain();
+        Assert.Same(failure, observed);
+        Assert.Equal(PlayerState.Stopped, _player.State);
+        Assert.Equal(2, _backends.Players.Count);
+    }
+
+    [Fact]
+    public void FailureToReopenOutputForRepeatIsReportedAndDoesNotRetry()
+    {
+        Exception? observed = null;
+        _player.Failed += (_, exception) => observed = exception;
+        _player.Open(_path, new PlayerSettings { RepeatEnabled = true });
+        _backends.Last!.RenderToEnd();
+        _backends.FailCreation = true;
+        Drain();
+        Assert.IsType<NotSupportedException>(observed);
+        Assert.Equal(PlayerState.Stopped, _player.State);
+        Assert.Single(_backends.Players);
+    }
+
+    [Fact]
+    public void OpeningAnotherTrackCancelsThePreviousTracksQueuedRepeat()
+    {
+        _player.Open(_path, new PlayerSettings { RepeatEnabled = true });
+        _backends.Last!.RenderToEnd();
+        _player.Open(_path, new PlayerSettings { RepeatEnabled = true });
+        Drain();
+        Assert.Equal(PlayerState.Playing, _player.State);
+        Assert.Equal(2, _backends.Players.Count);
+        Assert.Equal(TimeSpan.Zero, _player.Position);
+    }
+
     private void Drain() { while (_callbacks.TryDequeue(out var callback)) callback(); }
     public void Dispose() { _player.Dispose(); Directory.Delete(_directory, recursive: true); }
 

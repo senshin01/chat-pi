@@ -41,6 +41,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     public event EventHandler? Changed;
     public event EventHandler<Exception>? Failed;
     public PlayerState State { get; private set; }
+    public bool RepeatEnabled { get; set; }
     public string? FilePath { get; private set; }
     public WaveFormat? SourceFormat => _source?.WaveFormat;
     public WaveFormat? OutputFormat => _outputFormat;
@@ -58,6 +59,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
             _source = new SynchronizedWaveStream(sources.Open(path));
             _provider = NativePcmPipeline.Prepare(_source);
             _settings = settings;
+            RepeatEnabled = settings.RepeatEnabled;
             FilePath = path;
             State = PlayerState.Stopped;
             if (autoPlay) Play();
@@ -136,11 +138,18 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     private void OnPlaybackStopped(long generation, StoppedEventArgs args)
     {
         if (generation != _playGeneration || _backend is null) return;
+        var repeat = RepeatEnabled && State == PlayerState.Playing &&
+            _source is { Length: > 0 } && _source.Position >= _source.Length;
         DetachStoppedHandler();
         Exception? failure = args.Exception;
         try { ReleaseBackend(); }
         catch (Exception exception) { failure ??= exception; }
         State = failure is null ? PlayerState.Completed : PlayerState.Stopped;
+        if (failure is null && repeat)
+        {
+            try { Play(); return; }
+            catch (Exception exception) { failure = exception; State = PlayerState.Stopped; }
+        }
         Changed?.Invoke(this, EventArgs.Empty);
         if (failure is not null) Failed?.Invoke(this, failure);
     }
