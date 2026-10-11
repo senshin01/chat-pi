@@ -143,6 +143,15 @@ internal sealed class NativeMediaFoundationWaveStream : WaveStream
         ArgumentOutOfRangeException.ThrowIfNegative(count);
         if (offset > buffer.Length - count || count % WaveFormat.BlockAlign != 0) throw new ArgumentException("PCM の読み込み範囲が不正です。");
         if (count == 0) return 0;
+        if (_pendingSeek == Length)
+        {
+            // Seeking to exact EOF must not depend on a codec accepting an end timestamp.
+            _decoded = [];
+            _offset = 0;
+            _ended = true;
+            _pendingSeek = null;
+            return 0;
+        }
         if (_reader is null)
         {
             _reader = CreateReader(out var format);
@@ -150,10 +159,12 @@ internal sealed class NativeMediaFoundationWaveStream : WaveStream
         }
         if (_pendingSeek is { } desired)
         {
-            if (_ended)
+            // The FLAC source may finish internally while decoded packets are still buffered.
+            if (_ended || Path.GetExtension(_path).Equals(".flac", StringComparison.OrdinalIgnoreCase))
             {
-                Marshal.ReleaseComObject(_reader);
-                _reader = CreateReader(out _);
+                ReleaseReader();
+                _reader = CreateReader(out var format);
+                if (!format.Equals(WaveFormat)) throw new InvalidDataException("デコーダーの音声形式が変わりました。");
             }
             var value = PropVariant.FromLong((long)((decimal)desired / WaveFormat.BlockAlign * TimeSpan.TicksPerSecond / WaveFormat.SampleRate));
             var pointer = Marshal.AllocHGlobal(Marshal.SizeOf<PropVariant>());
@@ -223,7 +234,14 @@ internal sealed class NativeMediaFoundationWaveStream : WaveStream
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing && _reader is not null) { Marshal.ReleaseComObject(_reader); _reader = null; }
+        if (disposing) ReleaseReader();
         base.Dispose(disposing);
+    }
+
+    private void ReleaseReader()
+    {
+        var reader = _reader;
+        _reader = null;
+        if (reader is not null) Marshal.ReleaseComObject(reader);
     }
 }
