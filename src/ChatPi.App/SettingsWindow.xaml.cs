@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using ChatPi.App.Audio;
 using ChatPi.App.Services;
 using ChatPi.Core;
+using ChatPi.Core.Audio;
 
 namespace ChatPi.App;
 
@@ -10,12 +11,22 @@ public partial class SettingsWindow : Window
 {
     private readonly PlayerSettings _original;
     private readonly Action<PlayerSettings> _save;
+    private readonly int _sampleRate;
+    private double[] _bandGains;
 
-    public SettingsWindow(PlayerSettings settings, Action<PlayerSettings> save)
+    public SettingsWindow(PlayerSettings settings, Action<PlayerSettings> save, int sampleRate = 44100)
     {
         _original = settings;
         _save = save;
+        _sampleRate = sampleRate;
+        _bandGains = (double[])settings.Dsp.BandGainsDb.Clone();
         InitializeComponent();
+        UpsamplingBox.SelectedValue = settings.Dsp.UpsamplingFactor.ToString();
+        EqualizerEnabledBox.IsChecked = settings.Dsp.EqualizerEnabled;
+        AutoHeadroomBox.IsChecked = settings.Dsp.AutoHeadroom;
+        DitherBox.IsChecked = settings.Dsp.DitherEnabled;
+        PreampBox.Text = settings.Dsp.PreampDb.ToString(System.Globalization.CultureInfo.CurrentCulture);
+        ReadAheadBox.Text = settings.ReadAheadMilliseconds.ToString();
         ThemeBox.SelectedValue = settings.Theme.ToString();
         SourceInitialized += (_, _) => ThemeManager.ApplyWindowTheme(this, settings.Theme);
         var notices = new List<string>();
@@ -56,11 +67,20 @@ public partial class SettingsWindow : Window
         {
             OutputMode.Asio => "メーカーの ASIO ドライバーへ直接出力します。対応しないサンプルレートでは停止します。ASIO の占有・共有の挙動はドライバーによります。",
             OutputMode.WasapiShared => "Windows ミキサーを通して再生します。デバイス設定に応じて Windows が形式を変換する場合があります。",
-            _ => "デバイスを排他的に使用します。対応しない形式はエラーを表示し、共有モードへ自動切り替えしません。音源のデジタル音量は変更しません。"
+            _ => "デバイスを排他的に使用します。対応しない形式はエラーを表示し、共有モードへ自動切り替えしません。"
         };
     }
 
     private void OnSave(object sender, RoutedEventArgs args)
+    {
+        if (SaveSettings()) DialogResult = true;
+    }
+    private void OnApply(object sender, RoutedEventArgs args) => SaveSettings();
+    private void OnEqualizer(object sender, RoutedEventArgs args)
+    {
+        new EqualizerWindow(_bandGains, _sampleRate, _original.Theme, gains => _bandGains = gains) { Owner = this }.ShowDialog();
+    }
+    private bool SaveSettings()
     {
         try
         {
@@ -72,6 +92,8 @@ public partial class SettingsWindow : Window
                 if (DeviceBox.SelectedItem is null) throw new ArgumentException("再生デバイスを選択してください。");
             }
             else if (!int.TryParse(ChannelBox.Text, out channel)) throw new ArgumentException("出力開始チャンネルは整数で入力してください。");
+            if (!double.TryParse(PreampBox.Text, out var preamp)) throw new ArgumentException("プリアンプは数値で入力してください。");
+            if (!int.TryParse(ReadAheadBox.Text, out var readAhead)) throw new ArgumentException("先読みは整数で入力してください。");
             var settings = _original with
             {
                 OutputMode = Mode,
@@ -79,16 +101,27 @@ public partial class SettingsWindow : Window
                 WasapiDeviceId = DeviceBox.SelectedItem is AudioDevice device ? device.Id : _original.WasapiDeviceId,
                 AsioDriverName = DriverBox.SelectedItem as string ?? _original.AsioDriverName,
                 LatencyMilliseconds = latency,
-                AsioChannelOffset = channel - 1
+                AsioChannelOffset = channel - 1,
+                ReadAheadMilliseconds = readAhead,
+                Dsp = new DspSettings
+                {
+                    EqualizerEnabled = EqualizerEnabledBox.IsChecked == true,
+                    BandGainsDb = (double[])_bandGains.Clone(),
+                    UpsamplingFactor = int.Parse((string)UpsamplingBox.SelectedValue),
+                    AutoHeadroom = AutoHeadroomBox.IsChecked == true,
+                    PreampDb = preamp,
+                    DitherEnabled = DitherBox.IsChecked == true
+                }
             };
             // An unavailable saved driver is not a valid current selection.
             if (Mode == OutputMode.Asio && DriverBox.SelectedItem is null)
                 throw new ArgumentException("利用可能な ASIO ドライバーを選択してください。");
             settings.Validate();
             _save(settings);
-            DialogResult = true;
+            ErrorText.Text = "適用しました。";
+            return true;
         }
-        catch (Exception exception) { ErrorText.Text = exception.Message; }
+        catch (Exception exception) { ErrorText.Text = exception.Message; return false; }
     }
     private void OnRegister(object sender, RoutedEventArgs args)
     {

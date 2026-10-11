@@ -6,10 +6,10 @@
         WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
   <Grid Margin="26">
     <Grid.RowDefinitions><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <ScrollViewer x:Name="SettingsScroll" VerticalScrollBarVisibility="Auto">
       <StackPanel>
         <TextBlock Text="設定" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,6" />
-        <TextBlock Text="シンプルに、元のサンプルレートで。" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,24" />
+        <TextBlock Text="出力と音声処理を、自分に合わせて。" Foreground="{DynamicResource MutedBrush}" Margin="0,0,0,24" />
         <TextBlock Text="テーマ" Margin="0,0,0,7" />
         <ComboBox x:Name="ThemeBox" SelectedValuePath="Tag" AutomationProperties.Name="テーマ" Margin="0,0,0,22">
           <ComboBoxItem Content="ダーク" Tag="Dark" />
@@ -36,6 +36,26 @@
         </StackPanel>
         <TextBlock x:Name="ModeHelp" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,18,0,0" />
         <TextBlock x:Name="DeviceNotice" TextWrapping="Wrap" Foreground="{DynamicResource NoticeBrush}" FontSize="12" Margin="0,10,0,0" />
+        <Expander Header="音声処理 · EQ / アップサンプリング" Margin="0,20,0,0" IsExpanded="True">
+          <StackPanel Margin="0,14,0,0">
+            <TextBlock Text="アップサンプリング" Margin="0,0,0,7" />
+            <ComboBox x:Name="UpsamplingBox" SelectedValuePath="Tag" AutomationProperties.Name="アップサンプリング">
+              <ComboBoxItem Content="オフ · 元のサンプルレート" Tag="1" />
+              <ComboBoxItem Content="2倍 · 44.1 → 88.2 / 48 → 96 kHz" Tag="2" />
+              <ComboBoxItem Content="4倍 · 44.1 → 176.4 / 48 → 192 kHz" Tag="4" />
+            </ComboBox>
+            <CheckBox x:Name="EqualizerEnabledBox" Content="15バンド EQ を使う" Margin="0,16,0,10" AutomationProperties.Name="EQ オン／オフ" />
+            <Button Content="EQ を調整…" Click="OnEqualizer" HorizontalAlignment="Left" />
+            <CheckBox x:Name="AutoHeadroomBox" Content="自動でクリッピング対策の余裕を確保" Margin="0,18,0,7" />
+            <TextBlock Text="手動プリアンプ (dB) · −24〜0" Margin="0,8,0,7" />
+            <TextBox x:Name="PreampBox" AutomationProperties.Name="手動プリアンプ dB" />
+            <CheckBox x:Name="DitherBox" Content="DSP の整数出力に TPDF ディザーを使う" Margin="0,14,0,0" />
+            <TextBlock Text="DSP オフでは音声を変更しません。実際の減衰量は再生画面に表示します。" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,10,0,0" />
+            <TextBlock Text="アプリの先読み (ms) · 20〜200" Margin="0,16,0,7" />
+            <TextBox x:Name="ReadAheadBox" AutomationProperties.Name="アプリの先読み ms" />
+            <TextBlock Text="既定は 40 ms。機器の転送サイズに必要な場合は増やします。音切れする場合は先読みを増やしてください。" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,8,0,0" />
+          </StackPanel>
+        </Expander>
         <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,22,0,0" Padding="0,18,0,0">
           <StackPanel>
             <TextBlock Text="ファイルの既定アプリ" FontWeight="SemiBold" />
@@ -50,6 +70,7 @@
     </ScrollViewer>
     <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
       <Button Content="キャンセル" IsCancel="True" Margin="0,0,10,0" />
+      <Button Content="適用" Click="OnApply" Margin="0,0,10,0" />
       <Button Content="保存" Click="OnSave" IsDefault="True" Background="{DynamicResource AccentBrush}" Foreground="{DynamicResource AccentForegroundBrush}" />
     </StackPanel>
   </Grid>

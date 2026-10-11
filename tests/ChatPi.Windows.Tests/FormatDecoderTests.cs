@@ -176,7 +176,11 @@ public sealed class FormatDecoderTests
         public void ReadToEnd()
         {
             var buffer = new byte[source.WaveFormat.BlockAlign * 1024];
-            while (source.Read(buffer, 0, buffer.Length) > 0) { }
+            while (true)
+            {
+                if (source is BufferedAudioSource prepared) prepared.WaitForData(buffer.Length);
+                if (source.Read(buffer, 0, buffer.Length) == 0) break;
+            }
             PlaybackStopped?.Invoke(this, new StoppedEventArgs());
         }
     }

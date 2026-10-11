@@ -21,7 +21,7 @@ public sealed class DeviceSampleConverter
     private readonly WaveFormat _source;
     private readonly DeviceSampleFormat _output;
 
-    public DeviceSampleConverter(WaveFormat source, DeviceSampleFormat output)
+    public DeviceSampleConverter(WaveFormat source, DeviceSampleFormat output, bool alreadyQuantized = false)
     {
         if (source.Encoding is not (WaveFormatEncoding.Pcm or WaveFormatEncoding.IeeeFloat) ||
             source.BitsPerSample is not (16 or 24 or 32) ||
@@ -30,7 +30,7 @@ public sealed class DeviceSampleConverter
         if (output.ContainerBytes is < 2 or > 4 || output.ValidBits is < 16 or > 32 ||
             output.ValidBits > output.ContainerBytes * 8 || (output.IsFloat && output != DeviceSampleFormat.Float32))
             throw new NotSupportedException("Unsupported device representation.");
-        if (source.Encoding == WaveFormatEncoding.Pcm &&
+        if (!alreadyQuantized && source.Encoding == WaveFormatEncoding.Pcm &&
             (output.IsFloat ? source.BitsPerSample > 24 : source.BitsPerSample > output.ValidBits))
             throw new NotSupportedException("ASIO の出力精度が音源より低いため再生を中止しました。WASAPI または別のドライバーを選択してください。");
         _source = source;

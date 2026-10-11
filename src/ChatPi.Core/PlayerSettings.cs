@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ChatPi.Core.Audio;
 
 namespace ChatPi.Core;
 
@@ -15,9 +16,14 @@ public sealed record PlayerSettings
     public int AsioChannelOffset { get; init; }
     public bool RepeatEnabled { get; init; }
     public PlayerTheme Theme { get; init; } = PlayerTheme.Dark;
+    public DspSettings Dsp { get; init; } = new();
+    public int ReadAheadMilliseconds { get; init; } = 40;
 
     public void Validate()
     {
+        if (Dsp is null) throw new ArgumentException("音声処理の設定が不正です。");
+        Dsp.Validate();
+        if (ReadAheadMilliseconds is < 20 or > 200) throw new ArgumentException("先読みは 20〜200 ms にしてください。");
         if (!Enum.IsDefined(OutputMode))
             throw new ArgumentException("出力モードが不正です。");
         if (!Enum.IsDefined(Theme))

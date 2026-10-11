@@ -8,4 +8,8 @@
     <PackageReference Include="NVorbis" Version="1.0.0-rc.2" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="../../artifacts/native/soxr.dll" Link="soxr.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('../../artifacts/native/soxr.dll')" />
+    <Content Include="../../artifacts/native/libsoxr.so" Link="libsoxr.so" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" Condition="Exists('../../artifacts/native/libsoxr.so')" />
+  </ItemGroup>
 </Project>

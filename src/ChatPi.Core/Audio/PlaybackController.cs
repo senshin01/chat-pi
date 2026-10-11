@@ -31,12 +31,16 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
 {
     private WaveStream? _source;
     private PlaybackBackend? _backend;
-    private IWaveProvider? _provider;
+    private BufferedAudioSource? _provider;
     private PlayerSettings? _settings;
     private WaveFormat? _outputFormat;
     private string? _deviceName;
     private EventHandler<StoppedEventArgs>? _stoppedHandler;
     private long _playGeneration;
+    private long? _restFrame;
+    private double _lastPreampDb;
+    private long _lastClipped, _lastUnderruns;
+    private int _lastBufferMilliseconds = 40;
 
     public event EventHandler? Changed;
     public event EventHandler<Exception>? Failed;
@@ -47,9 +51,14 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     public WaveFormat? OutputFormat => _outputFormat;
     public string? DeviceName => _deviceName;
     public TimeSpan Duration => _source?.TotalTime ?? TimeSpan.Zero;
-    public TimeSpan Position => State == PlayerState.Completed ? Duration : _source?.CurrentTime ?? TimeSpan.Zero;
+    public TimeSpan Position => State == PlayerState.Completed ? Duration : _provider?.Position ??
+        (_restFrame is { } frame && _source is not null ? TimeSpan.FromSeconds(frame / (double)_source.WaveFormat.SampleRate) : _source?.CurrentTime ?? TimeSpan.Zero);
+    public double AppliedPreampDb => _provider?.AppliedPreampDb ?? _lastPreampDb;
+    public long ClippedSamples => _provider?.ClippedSamples ?? _lastClipped;
+    public long BufferUnderruns => _provider?.Underruns ?? _lastUnderruns;
+    public int ReadAheadMilliseconds => _provider?.BufferMilliseconds ?? _lastBufferMilliseconds;
 
-    public void Open(string path, PlayerSettings settings, bool autoPlay = true)
+    public void Open(string path, PlayerSettings settings, bool autoPlay = true, bool startPaused = false)
     {
         path = AudioFiles.ValidatePath(path);
         settings.Validate();
@@ -57,11 +66,11 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         try
         {
             _source = new SynchronizedWaveStream(sources.Open(path));
-            _provider = NativePcmPipeline.Prepare(_source);
+            _ = NativePcmPipeline.Prepare(_source);
             _settings = settings;
             RepeatEnabled = settings.RepeatEnabled;
             FilePath = path;
-            State = PlayerState.Stopped;
+            State = startPaused ? PlayerState.Paused : PlayerState.Stopped;
             if (autoPlay) Play();
             else Changed?.Invoke(this, EventArgs.Empty);
         }
@@ -77,11 +86,18 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         if (_source is null || State == PlayerState.Playing) return;
         if (_backend is null)
         {
-            _backend = backends.Create(_provider!, _settings!);
-            _outputFormat = _backend.OutputFormat;
-            _deviceName = _backend.DeviceName;
+            if (_restFrame is { } frame) _source.Position = frame * _source.WaveFormat.BlockAlign;
+            if (State == PlayerState.Completed || (_source.Length > 0 && _source.Position >= _source.Length)) _source.Position = 0;
+            try
+            {
+                _provider = new BufferedAudioSource(_source, _settings!);
+                _backend = backends.Create(_provider, _settings!);
+                _provider.Start();
+                _outputFormat = _backend.OutputFormat;
+                _deviceName = _backend.DeviceName;
+            }
+            catch { ReleaseBackend(); throw; }
         }
-        if (State == PlayerState.Completed || _source.Position >= _source.Length) _source.Position = 0;
         DetachStoppedHandler();
         var generation = ++_playGeneration;
         _stoppedHandler = (_, args) => dispatch(() => OnPlaybackStopped(generation, args));
@@ -107,12 +123,21 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    public bool TryUpdateDsp(PlayerSettings settings)
+    {
+        if (_provider is null || !_provider.TryUpdateEqualizer(settings.Dsp)) return false;
+        _settings = settings;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
     public void Stop()
     {
         if (_source is null) return;
         DetachStoppedHandler();
         ReleaseBackend();
         _source.Position = 0;
+        _restFrame = 0;
         State = PlayerState.Stopped;
         Changed?.Invoke(this, EventArgs.Empty);
     }
@@ -125,6 +150,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
         DetachStoppedHandler();
         ReleaseBackend();
         _source.CurrentTime = TimeSpan.FromTicks(Math.Clamp(position.Ticks, 0, Duration.Ticks));
+        _restFrame = _source.Position / _source.WaveFormat.BlockAlign;
         State = previous == PlayerState.Paused ? PlayerState.Paused : PlayerState.Stopped;
         if (previous == PlayerState.Playing && position >= Duration)
         {
@@ -139,7 +165,7 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     {
         if (generation != _playGeneration || _backend is null) return;
         var repeat = RepeatEnabled && State == PlayerState.Playing &&
-            _source is { Length: > 0 } && _source.Position >= _source.Length;
+            _source is { Length: > 0 } && _provider is { EndOfStream: true };
         DetachStoppedHandler();
         Exception? failure = args.Exception;
         try { ReleaseBackend(); }
@@ -166,7 +192,22 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
     {
         var backend = _backend;
         _backend = null;
-        backend?.Dispose();
+        var provider = _provider;
+        _provider = null;
+        // Stop the device before freeing the ring; stop the worker before seeking or closing the decoder.
+        try { backend?.Dispose(); }
+        finally
+        {
+            if (provider is not null)
+            {
+                provider.Dispose();
+                _restFrame = provider.SourceFramePosition;
+                _lastPreampDb = provider.AppliedPreampDb;
+                _lastClipped = provider.ClippedSamples;
+                _lastUnderruns = provider.Underruns;
+                _lastBufferMilliseconds = provider.BufferMilliseconds;
+            }
+        }
     }
 
     public void Close()
@@ -180,6 +221,10 @@ public sealed class PlaybackController(IAudioSourceFactory sources, IPlaybackBac
             _settings = null;
             _outputFormat = null;
             _deviceName = null;
+            _restFrame = null;
+            _lastPreampDb = 0;
+            _lastClipped = _lastUnderruns = 0;
+            _lastBufferMilliseconds = 40;
             _source?.Dispose();
             _source = null;
             FilePath = null;

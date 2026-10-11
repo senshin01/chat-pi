@@ -4,6 +4,7 @@ if ($Runtime -ne "win-x64") { throw "The initial release supports Windows x64 an
 $repo = Split-Path -Parent $PSScriptRoot
 Push-Location $repo
 try {
+    & "$PSScriptRoot/build-soxr.ps1"
     $output = Join-Path $repo "artifacts/ChatPi-$Runtime"
     $zip = Join-Path $repo "artifacts/ChatPi-$Runtime.zip"
     if (Test-Path $output) { Remove-Item -Recurse -Force $output }
@@ -12,6 +13,12 @@ try {
     Copy-Item README.md, LICENSE, THIRD-PARTY-NOTICES.md $output
     Copy-Item docs/windows-testing.md (Join-Path $output "WINDOWS-TESTING.md")
     Copy-Item -Recurse licenses (Join-Path $output "licenses")
+    New-Item -ItemType Directory -Force (Join-Path $output "third-party") | Out-Null
+    Copy-Item third-party/soxr-0.1.3.tar.gz (Join-Path $output "third-party")
+    Copy-Item third-party/README.md (Join-Path $output "third-party")
+    Copy-Item docs/audio-processing.md (Join-Path $output "AUDIO-PROCESSING.md")
+    Copy-Item scripts/build-soxr.ps1 (Join-Path $output "third-party/build-soxr.ps1")
+    if (!(Test-Path (Join-Path $output "soxr.dll"))) { throw "libsoxr is missing from publish output" }
     $cacheLine = dotnet nuget locals global-packages --list --force-english-output
     if ($LASTEXITCODE -ne 0) { throw "Cannot locate NuGet package cache" }
     $nugetCache = ($cacheLine | Where-Object { $_ -match '^global-packages:' } | Select-Object -First 1) -replace '^global-packages:\s*', ''

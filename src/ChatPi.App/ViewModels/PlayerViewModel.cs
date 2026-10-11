@@ -79,8 +79,14 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
     public string DeviceText => _player.DeviceName ?? "設定から出力デバイスを選択できます";
     public string OutputText => _player.OutputFormat is { } format
         ? $"出力 {format.SampleRate / 1000.0:0.###} kHz / {format.BitsPerSample} bit" +
-          (Settings.OutputMode == OutputMode.WasapiShared ? " · Windows ミキサー経由" : " · DSP なし")
+          (Settings.OutputMode == OutputMode.WasapiShared ? " · Windows ミキサー経由" : "") +
+          (Settings.Dsp.Enabled ? $" · EQ {(Settings.Dsp.EqualizerEnabled ? "オン" : "オフ")} · SRC {(Settings.Dsp.UpsamplingFactor == 1 ? "オフ" : $"×{Settings.Dsp.UpsamplingFactor}")}" : " · DSP なし")
         : "";
+    public int SourceSampleRate => _player.SourceFormat?.SampleRate ?? 44100;
+    public string DspDetailText => _player.OutputFormat is null ? "" :
+        $"プリアンプ {_player.AppliedPreampDb:0.0} dB · 先読み {_player.ReadAheadMilliseconds} ms" +
+        (_player.ClippedSamples > 0 ? $" · ピーク超過 {_player.ClippedSamples:N0}" : "") +
+        (_player.BufferUnderruns > 0 ? $" · バッファ不足 {_player.BufferUnderruns:N0}" : "");
     public string StatusText => _player.State switch
     {
         PlayerState.Playing => "再生中",
@@ -139,7 +145,9 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
     public void ApplySettings(PlayerSettings settings)
     {
         settings.Validate();
-        var outputChanged = (settings with { RepeatEnabled = Settings.RepeatEnabled, Theme = Settings.Theme }) != Settings;
+        var deviceChanged = (settings with { RepeatEnabled = Settings.RepeatEnabled, Theme = Settings.Theme, Dsp = Settings.Dsp }) != Settings;
+        var dspChanged = !settings.Dsp.SameAs(Settings.Dsp);
+        var outputChanged = deviceChanged || dspChanged;
         var themeChanged = settings.Theme != Settings.Theme;
         _store.Save(settings);
         Settings = settings;
@@ -147,11 +155,13 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
         if (themeChanged) _applyTheme(settings.Theme);
         var position = _player.Position;
         var wasPlaying = IsPlaying;
+        var wasPaused = _player.State == PlayerState.Paused;
+        if (dspChanged && !deviceChanged && _player.TryUpdateDsp(settings)) outputChanged = false;
         if (outputChanged && _lastPath is not null)
         {
             Try(() =>
             {
-                _player.Open(_lastPath, settings, autoPlay: false);
+                _player.Open(_lastPath, settings, autoPlay: false, startPaused: wasPaused);
                 _player.Seek(position);
                 if (wasPlaying) _player.Play();
             });
@@ -162,6 +172,7 @@ public sealed class PlayerViewModel : INotifyPropertyChanged, IDisposable
     public void SetError(string message) { _error = message; NotifyAll(); }
     public void RefreshProgress()
     {
+        OnPropertyChanged(nameof(DspDetailText));
         OnPropertyChanged(nameof(PositionSeconds));
         if (!IsSeeking)
         {

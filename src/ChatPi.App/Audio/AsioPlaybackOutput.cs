@@ -33,11 +33,17 @@ internal sealed class AsioPlaybackOutput : IWavePlayer
             .Select(channel => MapFormat(driver.Capabilities.OutputChannelInfos[channel].type)).ToArray();
         if (formats.Distinct().Count() != 1)
             throw new NotSupportedException("左右で音声形式が異なる ASIO 出力には対応していません。");
-        _converters = formats.Select(format => new DeviceSampleConverter(source.WaveFormat, format)).ToArray();
+        if (source is BufferedAudioSource { DspEnabled: true } buffered)
+            buffered.ConfigureOutput(formats[0].IsFloat
+                ? WaveFormat.CreateIeeeFloatWaveFormat(source.WaveFormat.SampleRate, source.WaveFormat.Channels)
+                : new WaveFormat(source.WaveFormat.SampleRate, 32, source.WaveFormat.Channels), formats[0].ValidBits);
+        _converters = formats.Select(format => new DeviceSampleConverter(source.WaveFormat, format,
+            alreadyQuantized: source is BufferedAudioSource { DspEnabled: true })).ToArray();
         OutputWaveFormat = formats[0].IsFloat
             ? WaveFormat.CreateIeeeFloatWaveFormat(source.WaveFormat.SampleRate, source.WaveFormat.Channels)
             : new WaveFormat(source.WaveFormat.SampleRate, formats[0].ValidBits, source.WaveFormat.Channels);
         _frames = driver.CreateBuffers(source.WaveFormat.Channels, 0, useMaxBufferSize: false);
+        if (source is BufferedAudioSource prepared) prepared.RequireDeviceFrames(_frames * 2);
         driver.SetChannelOffset(channelOffset, 0);
         _interleaved = new byte[_frames * source.WaveFormat.BlockAlign];
         _channels = formats.Select(format => new byte[_frames * format.ContainerBytes]).ToArray();
