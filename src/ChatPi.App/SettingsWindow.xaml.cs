@@ -92,7 +92,7 @@ public partial class SettingsWindow : Window
     }
     private void OnRegister(object sender, RoutedEventArgs args)
     {
-        try { FileAssociations.Register(); AssociationNotice.Text = "登録しました。Windows の「既定のアプリ」で Chat Pi を選択してください。"; }
+        try { FileAssociations.Register(); AssociationNotice.Text = "登録しました。形式別アイコンを使うには、Windows の「既定のアプリ」で各形式に Chat Pi を選び直してください。"; }
         catch (Exception exception) { ErrorText.Text = exception.Message; }
     }
     private void OnUnregister(object sender, RoutedEventArgs args)

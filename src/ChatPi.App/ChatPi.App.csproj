@@ -10,10 +10,11 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets/ChatPi.ico</ApplicationIcon>
     <PlatformTarget>x64</PlatformTarget>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <Description>Simple native-rate WASAPI and ASIO music player</Description>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="Assets/FileIcons/*.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="../ChatPi.Core/ChatPi.Core.csproj" />
     <PackageReference Include="NAudio" Version="2.3.0" />
   </ItemGroup>
