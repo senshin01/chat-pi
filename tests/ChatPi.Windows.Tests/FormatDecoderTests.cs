@@ -30,6 +30,13 @@ public sealed class FormatDecoderTests
         Assert.Equal(expected.AsSpan(position).ToArray(), ReadAll(stream));
         stream.Position = 0;
         Assert.Equal(expected, ReadAll(stream));
+        stream.Position = 0;
+        var preview = new byte[stream.WaveFormat.BlockAlign * 257];
+        Assert.Equal(preview.Length, stream.Read(preview, 0, preview.Length));
+        stream.CurrentTime = TimeSpan.FromMilliseconds(350);
+        Assert.Equal(expected.AsSpan((int)stream.Position).ToArray(), ReadAll(stream));
+        stream.Position = stream.Length;
+        Assert.Empty(ReadAll(stream));
     }
 
     [Theory]
@@ -81,6 +88,24 @@ public sealed class FormatDecoderTests
         Assert.Equal(PlayerState.Playing, player.State);
         player.Stop();
         Assert.Equal(PlayerState.Stopped, player.State);
+    }
+
+    [Theory]
+    [InlineData("lossless24.flac")]
+    [InlineData("alac24.m4a")]
+    [InlineData("aac.m4a")]
+    [InlineData("wma.wma")]
+    public void WindowsDecoderCanOpenOnTheUiThreadAndReadOnAnAudioThread(string file)
+    {
+        WpfTestHost.Run(() =>
+        {
+            using var stream = new WindowsAudioSourceFactory().Open(Fixture(file));
+            var original = Task.Run(() => ReadAll(stream)).WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+            Assert.NotEmpty(original);
+            stream.Position = 0;
+            var rewind = Task.Run(() => ReadAll(stream)).WaitAsync(TimeSpan.FromSeconds(10)).GetAwaiter().GetResult();
+            Assert.Equal(original, rewind);
+        });
     }
 
     [Fact]
