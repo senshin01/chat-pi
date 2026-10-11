@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NAudio.Core" Version="2.3.0" />
+    <PackageReference Include="NVorbis" Version="1.0.0-rc.2" />
     <PackageReference Include="TagLibSharp" Version="2.3.0" />
   </ItemGroup>
 </Project>

@@ -109,7 +109,7 @@ public sealed class PlaybackControllerTests : IDisposable
     public void UnsupportedFileDoesNotInterruptCurrentTrack()
     {
         _player.Open(_path, new PlayerSettings());
-        Assert.Throws<NotSupportedException>(() => _player.Open(Path.Combine(_directory, "song.flac"), new PlayerSettings()));
+        Assert.Throws<NotSupportedException>(() => _player.Open(Path.Combine(_directory, "song.dsf"), new PlayerSettings()));
         Assert.Equal(PlayerState.Playing, _player.State);
     }
 

@@ -11,8 +11,26 @@ public sealed record AudioDevice(string? Id, string Name);
 
 public sealed class WindowsAudioSourceFactory : IAudioSourceFactory
 {
-    public WaveStream Open(string path) => Path.GetExtension(path).Equals(".wav", StringComparison.OrdinalIgnoreCase)
-        ? new WaveFileReader(path) : new Mp3FileReader(path);
+    public WaveStream Open(string path)
+    {
+        path = AudioFiles.ValidatePath(path);
+        try
+        {
+            return Path.GetExtension(path).ToLowerInvariant() switch
+            {
+                ".wav" => new WaveFileReader(path),
+                ".mp3" => new Mp3FileReader(path),
+                ".aiff" or ".aif" => new AiffPcmWaveStream(path),
+                ".ogg" or ".oga" => new VorbisWaveStream(path),
+                ".flac" or ".m4a" or ".aac" or ".wma" => new NativeMediaFoundationWaveStream(path),
+                _ => throw new NotSupportedException("未対応の音声形式です。")
+            };
+        }
+        catch (COMException exception)
+        {
+            throw new NotSupportedException("Windows の音声デコーダーでこのファイルを開けません。破損・DRM・未対応コーデックを確認してください。Windows N では Media Feature Pack が必要です。", exception);
+        }
+    }
 }
 
 public sealed class WindowsAudioBackendFactory : IPlaybackBackendFactory

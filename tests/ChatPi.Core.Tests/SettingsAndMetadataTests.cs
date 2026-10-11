@@ -89,7 +89,18 @@ public sealed class SettingsAndMetadataTests : IDisposable
     [Theory]
     [InlineData("SONG.MP3", true)]
     [InlineData("音楽.WaV", true)]
-    [InlineData("song.flac", false)]
+    [InlineData("song.FLAC", true)]
+    [InlineData("song.m4a", true)]
+    [InlineData("song.AAC", true)]
+    [InlineData("song.aiff", true)]
+    [InlineData("song.aif", true)]
+    [InlineData("song.ogg", true)]
+    [InlineData("song.oga", true)]
+    [InlineData("song.WMA", true)]
+    [InlineData("song.dsf", false)]
+    [InlineData("song.dff", false)]
+    [InlineData("song.ape", false)]
+    [InlineData("song.opus", false)]
     [InlineData("song.mp3.exe", false)]
     public void FileSupportUsesExactCaseInsensitiveExtensions(string name, bool expected) =>
         Assert.Equal(expected, AudioFiles.IsSupported(name));
@@ -97,6 +108,28 @@ public sealed class SettingsAndMetadataTests : IDisposable
     [Fact]
     public void ShellLaunchSelectsOneFileWithoutAPlaylist() =>
         Assert.Equal("a.wav", AudioFiles.FirstFileArgument(["", "a.wav", "b.mp3"]));
+
+    [Fact]
+    public void FilterAndSupportedExtensionsAgreeAndDoNotIncludeDsd()
+    {
+        var filter = AudioFiles.FileDialogFilter.Split('|')[1].Split(';');
+        Assert.Equal(AudioFiles.Extensions.Select(extension => $"*{extension}"), filter);
+        Assert.DoesNotContain(".dsf", AudioFiles.Extensions);
+        Assert.DoesNotContain(".dff", AudioFiles.Extensions);
+    }
+
+    [Theory]
+    [InlineData("lossless24.flac")]
+    [InlineData("alac24.m4a")]
+    [InlineData("vorbis.ogg")]
+    public void NewFormatsExposeTitleArtistAndAlbum(string filename)
+    {
+        var metadata = TrackMetadata.Read(Path.Combine(AppContext.BaseDirectory, "Fixtures", filename));
+        Assert.Equal("Fixture Song", metadata.Title);
+        Assert.Equal("Fixture Artist", metadata.Artist);
+        Assert.Equal("Fixture Album", metadata.Album);
+        if (filename != "vorbis.ogg") Assert.NotEmpty(metadata.Artwork!);
+    }
 
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 }

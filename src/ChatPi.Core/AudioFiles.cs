@@ -2,15 +2,18 @@ namespace ChatPi.Core;
 
 public static class AudioFiles
 {
-    public static bool IsSupported(string path) =>
-        Path.GetExtension(path).Equals(".mp3", StringComparison.OrdinalIgnoreCase) ||
-        Path.GetExtension(path).Equals(".wav", StringComparison.OrdinalIgnoreCase);
+    public static IReadOnlyList<string> Extensions { get; } = Array.AsReadOnly(new[]
+        { ".mp3", ".wav", ".flac", ".m4a", ".aac", ".aiff", ".aif", ".ogg", ".oga", ".wma" });
+    public const string FormatSummary = "MP3 / WAV / FLAC / ALAC / AAC / AIFF / Ogg Vorbis / WMA";
+    public static string FileDialogFilter => $"音楽ファイル|{string.Join(';', Extensions.Select(extension => $"*{extension}"))}";
+
+    public static bool IsSupported(string path) => Extensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase);
 
     public static string ValidatePath(string path)
     {
         var fullPath = Path.GetFullPath(path);
         if (!IsSupported(fullPath))
-            throw new NotSupportedException("初期版で再生できるのは MP3 と WAV です。");
+            throw new NotSupportedException($"対応形式は {FormatSummary} です。DSD は未対応です。");
         if (!File.Exists(fullPath))
             throw new FileNotFoundException("音楽ファイルが見つかりません。", fullPath);
         return fullPath;

@@ -59,7 +59,7 @@ public partial class MainWindow : Window
     public void OpenFile(string path) => _model.Open(path);
     private void OnOpen(object? sender, RoutedEventArgs args)
     {
-        var dialog = new OpenFileDialog { Filter = "音楽ファイル (*.mp3;*.wav)|*.mp3;*.wav", CheckFileExists = true, Multiselect = false };
+        var dialog = new OpenFileDialog { Filter = AudioFiles.FileDialogFilter, CheckFileExists = true, Multiselect = false };
         if (dialog.ShowDialog(this) == true) OpenFile(dialog.FileName);
     }
     private void OnTogglePlay(object? sender, RoutedEventArgs args) => _model.TogglePlay();

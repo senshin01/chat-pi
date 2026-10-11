@@ -58,6 +58,11 @@
         "resolved": "13.0.3",
         "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
       },
+      "NVorbis": {
+        "type": "Transitive",
+        "resolved": "1.0.0-rc.2",
+        "contentHash": "/X+5SlKt4bhzaCeADCs5BIiffvJisvWoaLdcneRHoAA2CE7c+HIVHT9JCAMiH0EIotd7JQ0luna+2/7A5gFwAQ=="
+      },
       "TagLibSharp": {
         "type": "Transitive",
         "resolved": "2.3.0",
@@ -107,6 +112,7 @@
         "type": "Project",
         "dependencies": {
           "NAudio.Core": "[2.3.0, )",
+          "NVorbis": "[1.0.0-rc.2, )",
           "TagLibSharp": "[2.3.0, )"
         }
       }
