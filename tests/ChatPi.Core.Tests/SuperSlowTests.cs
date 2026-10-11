@@ -100,10 +100,13 @@ public sealed class SuperSlowTests(ITestOutputHelper log)
     {
         using var resampler = new SuperSlowResampler(4, 2);
         var input = new double[512]; var output = new double[2048];
-        resampler.Process(input, 0, 256, output, out _);
+        // Warm all streaming paths and runtime initialization before measuring.
+        // Capture the second counter before invoking any test assertion helpers.
+        for (var i = 0; i < 100; i++) resampler.Process(input, 0, 256, output, out _);
         var before = GC.GetAllocatedBytesForCurrentThread();
         for (var i = 0; i < 100; i++) resampler.Process(input, 0, 256, output, out _);
-        Assert.Equal(before, GC.GetAllocatedBytesForCurrentThread());
+        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(0, allocated);
         Assert.Throws<ArgumentOutOfRangeException>(() => resampler.Process(input, -1, 256, output, out _));
         Assert.Throws<ArgumentException>(() => resampler.Process(input, 1, 256, output, out _));
         Assert.Throws<ArgumentException>(() => resampler.Process(input, 0, 256, new double[1], out _));
