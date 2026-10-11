@@ -140,32 +140,36 @@ public sealed class SuperSlowTests(ITestOutputHelper log)
         }
     }
 
-    [Fact]
-    public void FilterIsPersistedDefaultsToStandardAndDoesNotEnableDspByItself()
+    [Theory]
+    [InlineData(UpsamplingFilter.SuperSlow)] [InlineData(UpsamplingFilter.UltraHigh)]
+    public void FilterIsPersistedDefaultsToStandardAndDoesNotEnableDspByItself(UpsamplingFilter filter)
     {
         var old = System.Text.Json.JsonSerializer.Deserialize<PlayerSettings>("{\"Dsp\":{\"UpsamplingFactor\":4}}");
         Assert.Equal(UpsamplingFilter.Standard, old!.Dsp.Filter);
-        var selected = old with { Dsp = old.Dsp with { Filter = UpsamplingFilter.SuperSlow } };
+        var legacy = System.Text.Json.JsonSerializer.Deserialize<PlayerSettings>("{\"Dsp\":{\"Filter\":1}}");
+        Assert.Equal(UpsamplingFilter.SuperSlow, legacy!.Dsp.Filter);
+        var selected = old with { Dsp = old.Dsp with { Filter = filter } };
         var reloaded = System.Text.Json.JsonSerializer.Deserialize<PlayerSettings>(System.Text.Json.JsonSerializer.Serialize(selected));
         Assert.Equal(selected, reloaded);
         Assert.NotEqual(old, selected);
-        Assert.False(new DspSettings { Filter = UpsamplingFilter.SuperSlow }.Enabled);
+        Assert.False(new DspSettings { Filter = filter }.Enabled);
         Assert.Throws<ArgumentException>(() => (selected.Dsp with { Filter = (UpsamplingFilter)123 }).Validate());
     }
 
-    [Fact]
-    public void SelectingFilterWithSrcOffPreservesNativeBytesAndActiveSrcRequiresRestart()
+    [Theory]
+    [InlineData(UpsamplingFilter.SuperSlow)] [InlineData(UpsamplingFilter.UltraHigh)]
+    public void SelectingFilterWithSrcOffPreservesNativeBytesAndActiveSrcRequiresRestart(UpsamplingFilter filter)
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "reference24.wav");
         using var stream = new WaveFileReader(path);
         var original = new byte[stream.Length]; stream.ReadExactly(original); stream.Position = 0;
-        using (var source = new BufferedAudioSource(stream, new PlayerSettings { Dsp = new DspSettings { Filter = UpsamplingFilter.SuperSlow, PreampDb = -5 } }))
+        using (var source = new BufferedAudioSource(stream, new PlayerSettings { Dsp = new DspSettings { Filter = filter, PreampDb = -5 } }))
         {
             source.Start(); Assert.Equal(original, Render(source)); Assert.Equal(0, source.AppliedPreampDb);
             Assert.True(source.TryUpdateEqualizer(new DspSettings()));
         }
         stream.Position = 0;
-        var settings = new DspSettings { Filter = UpsamplingFilter.SuperSlow, UpsamplingFactor = 4, EqualizerEnabled = true };
+        var settings = new DspSettings { Filter = filter, UpsamplingFactor = 4, EqualizerEnabled = true };
         using var active = new BufferedAudioSource(stream, new PlayerSettings { Dsp = settings });
         active.Start();
         Assert.False(active.TryUpdateEqualizer(settings with { Filter = UpsamplingFilter.Standard }));

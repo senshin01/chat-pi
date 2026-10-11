@@ -12,6 +12,7 @@ public static class PcmResamplers
     public static IPcmResampler Create(int inputRate, int factor, int channels, UpsamplingFilter filter) => filter switch
     {
         UpsamplingFilter.Standard => new SoxrResampler(inputRate, factor, channels),
+        UpsamplingFilter.UltraHigh => new SoxrResampler(inputRate, factor, channels, filter),
         UpsamplingFilter.SuperSlow => new SuperSlowResampler(factor, channels),
         _ => throw new ArgumentOutOfRangeException(nameof(filter))
     };

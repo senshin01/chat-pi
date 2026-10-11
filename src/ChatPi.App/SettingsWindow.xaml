@@ -47,9 +47,10 @@
             <TextBlock Text="サンプリングフィルター" Margin="0,16,0,7" />
             <ComboBox x:Name="FilterBox" SelectedValuePath="Tag" AutomationProperties.Name="サンプリングフィルター">
               <ComboBoxItem Content="標準 · 高精度" Tag="Standard" />
+              <ComboBoxItem Content="超高精度 · libsoxr 32 bit品質" Tag="UltraHigh" />
               <ComboBoxItem Content="スーパースロー · 低リンギング" Tag="SuperSlow" />
             </ComboBox>
-            <TextBlock Text="2倍／4倍で適用。スーパースローは高域が緩やかに減衰し、不要な高周波成分の抑制は弱くなります。" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,8,0,0" />
+            <TextBlock Text="2倍／4倍で適用。超高精度は変換精度を高め、先読みが増えます。スーパースローは高域が緩やかに減衰し、不要な高周波成分の抑制は弱くなります。" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,8,0,0" />
             <CheckBox x:Name="EqualizerEnabledBox" Content="15バンド EQ を使う" Margin="0,16,0,10" AutomationProperties.Name="EQ オン／オフ" />
             <Button Content="EQ を調整…" Click="OnEqualizer" HorizontalAlignment="Left" />
             <CheckBox x:Name="AutoHeadroomBox" Content="自動でクリッピング対策の余裕を確保" Margin="0,18,0,7" />

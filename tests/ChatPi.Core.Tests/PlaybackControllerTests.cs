@@ -227,6 +227,7 @@ public sealed class PlaybackControllerTests : IDisposable
     [Theory]
     [InlineData(1, true, UpsamplingFilter.Standard)] [InlineData(2, false, UpsamplingFilter.Standard)] [InlineData(4, true, UpsamplingFilter.Standard)]
     [InlineData(2, false, UpsamplingFilter.SuperSlow)] [InlineData(4, true, UpsamplingFilter.SuperSlow)]
+    [InlineData(2, false, UpsamplingFilter.UltraHigh)] [InlineData(4, true, UpsamplingFilter.UltraHigh)]
     public void DspRepeatDrainsTheEntireTrackAndRestartsWithTheSameOutput(int factor, bool eq, UpsamplingFilter filter)
     {
         _player.Open(_path, new PlayerSettings { RepeatEnabled = true,
