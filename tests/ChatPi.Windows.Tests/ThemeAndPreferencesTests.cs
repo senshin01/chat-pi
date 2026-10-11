@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ChatPi.App;
 using ChatPi.App.Services;
 using ChatPi.App.ViewModels;
@@ -61,12 +62,14 @@ public sealed class ThemeAndPreferencesTests
             using (var model = CreateModel(store, backend, app.Resources))
             {
                 window.DataContext = model;
+                FlushBindings();
                 var repeatButton = (Button)window.FindName("RepeatButton");
                 model.Open(path);
                 model.Seek(0.5);
                 var output = backend.Last;
                 var count = backend.Created;
                 model.ToggleRepeat();
+                FlushBindings();
                 Assert.True(model.RepeatEnabled);
                 Assert.True(store.Load().RepeatEnabled);
                 Assert.Equal("リピート: オン", model.RepeatLabel);
@@ -84,6 +87,7 @@ public sealed class ThemeAndPreferencesTests
                 Assert.Equal("一時停止中", model.StatusText);
                 Assert.Equal(count, backend.Created);
                 Assert.False(store.Load().RepeatEnabled);
+                FlushBindings();
                 Assert.Equal(((SolidColorBrush)app.FindResource("PanelBrush")).Color, ((SolidColorBrush)repeatButton.Background).Color);
                 model.ToggleRepeat();
                 model.ApplySettings(model.Settings with { Theme = PlayerTheme.Light });
@@ -103,6 +107,9 @@ public sealed class ThemeAndPreferencesTests
 
     private static PlayerViewModel CreateModel(SettingsStore store, CountingBackend backend, ResourceDictionary resources) =>
         new(new PlaybackController(new WavSources(), backend, action => action()), store, theme => ThemeManager.Apply(resources, theme));
+
+    // WPF inherits DataContext and updates style bindings through its dispatcher.
+    private static void FlushBindings() => Dispatcher.CurrentDispatcher.Invoke(() => { }, DispatcherPriority.ApplicationIdle);
 
     private sealed class WavSources : IAudioSourceFactory
     {
