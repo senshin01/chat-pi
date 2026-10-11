@@ -1,0 +1,97 @@
+# Chat Pi
+
+Windows 向けの、とてもシンプルな WASAPI / ASIO 音楽プレイヤーです。
+**初期版 v0.1** は、1 ファイルを開いて再生する基本機能に絞っています。
+
+## できること
+
+- MP3 / WAV を開いて自動再生。ドラッグ＆ドロップにも対応。
+- 再生、一時停止、停止、シーク。
+- WASAPI 排他（既定）、WASAPI 共有、ASIO の選択とデバイス設定の保存。
+- タイトル、アーティスト、アルバム、埋め込みジャケットの表示。
+- MP3 / WAV の既定アプリ候補へのユーザー単位の登録・解除。
+- 別のファイルを開くと、既に起動中のウィンドウで再生を切り替え。
+
+プレイリスト、ストリーミング連携、音量調整、音量正規化、アップサンプリングはありません。
+
+## Windows で使う
+
+対象は **Windows 10 / 11 の x64** です。ASIO を使う場合は、機器メーカーの
+**64 bit ASIO ドライバー**が必要です。
+
+1. `ChatPi-win-x64.zip` を固定のフォルダーに**すべて展開**します。
+2. `ChatPi.exe` を起動します。配布フォルダーには .NET ランタイムが含まれているため、別途 .NET の導入は不要です。
+3. 右上の設定から出力モードとデバイスを選び、保存します。
+4. 「ファイルを開く」またはドラッグ＆ドロップで MP3 / WAV を開きます。
+
+Windows の音楽ファイルのダブルクリックで起動するには、設定の
+「登録して Windows の設定を開く」を押し、「既定のアプリ」で Chat Pi を選び、
+`.mp3` と `.wav` を割り当てます。登録だけでは現在の既定アプリは変わりません。
+実行ファイルの場所を移した場合は、移動先で再登録してください。
+アンインストールは設定画面で登録を解除し、展開したフォルダーを削除します。
+保存済み設定も消す場合は `%LOCALAPPDATA%\ChatPi` を削除します。
+
+コマンドライン起動も可能です。
+
+```powershell
+.\ChatPi.exe "C:\Music\音楽ファイル.wav"
+```
+
+複数ファイルを渡した場合は最初の 1 ファイルだけを使用します。
+ショートカットは `Ctrl+O`（開く）、`Space`（再生／一時停止）、`Esc`（停止）です。
+シークバーはクリック、ドラッグ、キーボードで操作できます。
+
+## 音声出力の方針
+
+| モード | 挙動 |
+| --- | --- |
+| WASAPI 排他 | 元のサンプルレートと PCM / float 表現でデバイスを開きます。未対応の形式はエラーにし、共有モードや別レートに自動切り替えしません。 |
+| WASAPI 共有 | Windows ミキサー経由です。Windows のデバイス設定に合わせて形式変換される場合があります。 |
+| ASIO | 元のサンプルレートでドライバーへ直接出力します。対応しないレート、チャンネル、精度を落とす整数変換はエラーにします。占有・共有はドライバーの実装に依存します。 |
+
+- WAV はモノラル／ステレオの PCM 8/16/24/32 bit と IEEE float 32 bit に対応。
+- ASIO は little-endian の Int16 / Int24 / Int32 / Float32、および Int32 コンテナー内の 16/18/20/24 bit 表現に対応。big-endian、float64、DSD は初期版の対象外です。
+- モノラルは左右に同じサンプルを出力。8 bit WAV は正確な整数変換で 16 bit に拡張します。
+- ASIO の整数幅の拡張は整数演算で行います。24 bit PCM を float32 に渡す場合も数値精度を保ちます。PCM32 → float32 は精度が落ちるため拒否します。
+- float → 整数の出力時はフルスケールに基づいて丸めます。±1 を超える値は整数の範囲に制限されます。初期版にはディザリングがありません。
+- MP3 は Windows の ACM デコーダーで PCM に展開します。MP3 自体は非可逆圧縮です。
+- デジタル音量は固定です。アプリは EQ、DSP、音量正規化を行いません。音量は機器側で調整してください。
+- 停止・再生終了・曲切り替えで出力を解放します。一時停止中は出力を保持する場合があります。
+
+物理デバイス、ドライバー、DAC 内部の処理まで含む bit-perfect や音質の保証はしていません。
+Windows 実機での初回確認手順は [docs/windows-testing.md](docs/windows-testing.md) を参照してください。
+
+## 開発
+
+C# / .NET 10 LTS / WPF / NAudio 2.3 / TagLibSharp 2.3 を使用しています。
+SDK バージョンは `global.json`、依存関係は各 `packages.lock.json` に固定しています。
+
+```powershell
+dotnet restore ChatPi.sln --locked-mode
+dotnet build ChatPi.sln -c Release --no-restore
+dotnet test tests/ChatPi.Core.Tests/ChatPi.Core.Tests.csproj -c Release --no-build --no-restore
+```
+
+Windows ではさらに実際の MP3 デコードと単一起動のテスト、アプリの起動を行います。
+
+```powershell
+dotnet test tests/ChatPi.Windows.Tests/ChatPi.Windows.Tests.csproj -c Release --no-build --no-restore
+dotnet run --project src/ChatPi.App
+./scripts/publish-windows.ps1
+```
+
+Linux でも Windows 向けのビルドと Core のテストは可能です。
+WPF の起動、Windows の ACM、レジストリ登録、WASAPI / ASIO の実デバイス確認は Windows が必要です。
+GitHub Actions には Linux の Core テストと Windows のビルド・統合テスト・ZIP 作成を用意しています。
+
+## 構成と次の段階
+
+- `src/ChatPi.Core`: 設定、メタデータ、再生状態、ネイティブレートの PCM パイプライン、デバイス用サンプル変換。
+- `src/ChatPi.App`: WPF 画面、Windows デコーダー、WASAPI / ASIO、単一起動、ファイル関連付け。
+- `tests/ChatPi.Core.Tests`: 実 WAV、サンプル精度、再生状態、設定・メタデータ、ファイル起動メッセージ転送のテスト。
+- `tests/ChatPi.Windows.Tests`: 実 MP3 の Windows デコードと名前付きパイプ転送の統合テスト。
+
+アップサンプリングは、実機で基本再生を確認した後に追加します。
+`NativePcmPipeline` とデバイス出力の間に、明示設定の DSP ステージを追加できる構成です。
+次段階では出力レート、フィルター、CPU 負荷、遅延、クリッピング対策、ディザリングを設計し、
+周波数応答・エイリアス除去・数値精度の測定を行います。
