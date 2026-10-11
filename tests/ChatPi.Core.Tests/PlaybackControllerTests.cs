@@ -225,11 +225,12 @@ public sealed class PlaybackControllerTests : IDisposable
     private void Drain() { while (_callbacks.TryDequeue(out var callback)) callback(); }
 
     [Theory]
-    [InlineData(1, true)] [InlineData(2, false)] [InlineData(4, true)]
-    public void DspRepeatDrainsTheEntireTrackAndRestartsWithTheSameOutput(int factor, bool eq)
+    [InlineData(1, true, UpsamplingFilter.Standard)] [InlineData(2, false, UpsamplingFilter.Standard)] [InlineData(4, true, UpsamplingFilter.Standard)]
+    [InlineData(2, false, UpsamplingFilter.SuperSlow)] [InlineData(4, true, UpsamplingFilter.SuperSlow)]
+    public void DspRepeatDrainsTheEntireTrackAndRestartsWithTheSameOutput(int factor, bool eq, UpsamplingFilter filter)
     {
         _player.Open(_path, new PlayerSettings { RepeatEnabled = true,
-            Dsp = new DspSettings { EqualizerEnabled = eq, UpsamplingFactor = factor, DitherEnabled = false } });
+            Dsp = new DspSettings { EqualizerEnabled = eq, UpsamplingFactor = factor, Filter = filter, DitherEnabled = false } });
         var first = _backends.Last!.RenderToEnd();
         Assert.Equal(44100 * factor * 8, first.Length);
         Drain();

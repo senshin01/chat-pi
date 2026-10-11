@@ -44,6 +44,12 @@
               <ComboBoxItem Content="2倍 · 44.1 → 88.2 / 48 → 96 kHz" Tag="2" />
               <ComboBoxItem Content="4倍 · 44.1 → 176.4 / 48 → 192 kHz" Tag="4" />
             </ComboBox>
+            <TextBlock Text="サンプリングフィルター" Margin="0,16,0,7" />
+            <ComboBox x:Name="FilterBox" SelectedValuePath="Tag" AutomationProperties.Name="サンプリングフィルター">
+              <ComboBoxItem Content="標準 · 高精度" Tag="Standard" />
+              <ComboBoxItem Content="スーパースロー · 低リンギング" Tag="SuperSlow" />
+            </ComboBox>
+            <TextBlock Text="2倍／4倍で適用。スーパースローは高域が緩やかに減衰し、不要な高周波成分の抑制は弱くなります。" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" FontSize="12" Margin="0,8,0,0" />
             <CheckBox x:Name="EqualizerEnabledBox" Content="15バンド EQ を使う" Margin="0,16,0,10" AutomationProperties.Name="EQ オン／オフ" />
             <Button Content="EQ を調整…" Click="OnEqualizer" HorizontalAlignment="Left" />
             <CheckBox x:Name="AutoHeadroomBox" Content="自動でクリッピング対策の余裕を確保" Margin="0,18,0,7" />
@@ -70,7 +76,7 @@
     </ScrollViewer>
     <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
       <Button Content="キャンセル" IsCancel="True" Margin="0,0,10,0" />
-      <Button Content="適用" Click="OnApply" Margin="0,0,10,0" />
+      <Button x:Name="ApplyButton" Content="適用" Click="OnApply" Margin="0,0,10,0" />
       <Button Content="保存" Click="OnSave" IsDefault="True" Background="{DynamicResource AccentBrush}" Foreground="{DynamicResource AccentForegroundBrush}" />
     </StackPanel>
   </Grid>

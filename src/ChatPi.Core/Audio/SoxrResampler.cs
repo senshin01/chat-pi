@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace ChatPi.Core.Audio;
 
 /// <summary>libsoxr 0.1.3, 24-bit quality, linear phase, double input/output/calculation.</summary>
-public sealed class SoxrResampler : IDisposable
+public sealed class SoxrResampler : IPcmResampler
 {
     private IntPtr _handle;
     private readonly int _channels;

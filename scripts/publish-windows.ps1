@@ -17,6 +17,7 @@ try {
     Copy-Item third-party/soxr-0.1.3.tar.gz (Join-Path $output "third-party")
     Copy-Item third-party/README.md (Join-Path $output "third-party")
     Copy-Item docs/audio-processing.md (Join-Path $output "AUDIO-PROCESSING.md")
+    Copy-Item docs/super-slow-response.svg $output
     Copy-Item scripts/build-soxr.ps1 (Join-Path $output "third-party/build-soxr.ps1")
     if (!(Test-Path (Join-Path $output "soxr.dll"))) { throw "libsoxr is missing from publish output" }
     $cacheLine = dotnet nuget locals global-packages --list --force-english-output

@@ -10,13 +10,15 @@ namespace ChatPi.Windows.Tests;
 public sealed class AsioPlaybackTests
 {
     [Theory]
-    [InlineData("lossless16.flac", 2)]
-    [InlineData("lossless16.flac", 4)]
-    [InlineData("lossless24.flac", 2)]
-    [InlineData("lossless24.flac", 4)]
-    [InlineData("reference16.wav", 4)]
-    [InlineData("tone.mp3", 2)]
-    public void RestartAfterUpsamplingSendsExactNativeSamplesToAsioBuffers(string file, int factor)
+    [InlineData("lossless16.flac", 2, UpsamplingFilter.Standard)]
+    [InlineData("lossless16.flac", 4, UpsamplingFilter.Standard)]
+    [InlineData("lossless24.flac", 2, UpsamplingFilter.Standard)]
+    [InlineData("lossless24.flac", 4, UpsamplingFilter.Standard)]
+    [InlineData("reference16.wav", 4, UpsamplingFilter.Standard)]
+    [InlineData("tone.mp3", 2, UpsamplingFilter.Standard)]
+    [InlineData("lossless16.flac", 2, UpsamplingFilter.SuperSlow)]
+    [InlineData("lossless24.flac", 4, UpsamplingFilter.SuperSlow)]
+    public void RestartAfterUpsamplingSendsExactNativeSamplesToAsioBuffers(string file, int factor, UpsamplingFilter filter)
     {
         WpfTestHost.Run(() =>
         {
@@ -29,7 +31,7 @@ public sealed class AsioPlaybackTests
             var store = new SettingsStore(settingsFile);
             try
             {
-                store.Save(new PlayerSettings { Dsp = new DspSettings { UpsamplingFactor = factor } });
+                store.Save(new PlayerSettings { Dsp = new DspSettings { UpsamplingFactor = factor, Filter = filter } });
                 // Render through the actual ASIO output's packing/callback, without physical hardware.
                 var upsampled = Render(path, store.Load(), state);
                 Assert.Contains(upsampled[0], sample => sample != 0);
