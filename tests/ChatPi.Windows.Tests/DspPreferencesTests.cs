@@ -72,11 +72,22 @@ public sealed class DspPreferencesTests
 
     private static void SavePreview(Window window, Size size, string name)
     {
-        window.Measure(size); window.Arrange(new Rect(size)); window.UpdateLayout();
+        if (!window.IsVisible)
+        {
+            window.WindowStartupLocation = WindowStartupLocation.Manual;
+            window.Left = -10000; window.Top = -10000;
+            window.ShowActivated = false; window.ShowInTaskbar = false;
+            window.Show();
+        }
+        window.Width = size.Width; window.Height = size.Height;
+        WpfTestHost.FlushBindings(); window.UpdateLayout();
         if (window is SettingsWindow settings) ((ScrollViewer)settings.FindName("SettingsScroll")).ScrollToVerticalOffset(340);
         WpfTestHost.FlushBindings(); window.UpdateLayout();
-        var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(window);
+        var content = (FrameworkElement)window.Content;
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth), (int)Math.Ceiling(content.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        var background = new DrawingVisual();
+        using (var drawing = background.RenderOpen()) drawing.DrawRectangle(window.Background, null, new Rect(0, 0, bitmap.PixelWidth, bitmap.PixelHeight));
+        bitmap.Render(background); bitmap.Render(content);
         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
         Directory.CreateDirectory("TestResults/UI");
         using var file = File.Create($"TestResults/UI/{name}.png"); encoder.Save(file);
